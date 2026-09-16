@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
 import { stages, workItems } from "@/db/schema";
@@ -83,5 +83,52 @@ export async function createStage(input: {
 
     revalidatePath(`/projects/${input.projectPublicId}`);
     return created;
+  });
+}
+
+// FR-005/FR-011 of 003-kanban-board
+export async function reorderStages(input: {
+  projectPublicId: string;
+  orderedStageIds: string[];
+}): Promise<Result<void>> {
+  return runAction(async () => {
+    const { project } = await requireProjectMember(input.projectPublicId);
+
+    await db.transaction(async (tx) => {
+      for (const [index, stagePublicId] of input.orderedStageIds.entries()) {
+        await tx
+          .update(stages)
+          .set({ position: index })
+          .where(and(eq(stages.publicId, stagePublicId), eq(stages.projectId, project.id)));
+      }
+    });
+
+    revalidatePath(`/projects/${input.projectPublicId}`);
+  });
+}
+
+// FR-006/FR-007 of 003-kanban-board
+export async function deleteStage(input: { projectPublicId: string; stageId: string }): Promise<Result<void>> {
+  return runAction(async () => {
+    const { project } = await requireProjectMember(input.projectPublicId);
+
+    const [stage] = await db
+      .select()
+      .from(stages)
+      .where(and(eq(stages.publicId, input.stageId), eq(stages.projectId, project.id)))
+      .limit(1);
+    if (!stage) throw new AppError("NOT_FOUND", "Column not found.");
+
+    const [itemCount] = await db
+      .select({ count: sql<number>`count(*)`.mapWith(Number) })
+      .from(workItems)
+      .where(eq(workItems.stageId, stage.id));
+    if ((itemCount?.count ?? 0) > 0) {
+      throw new AppError("STAGE_NOT_EMPTY", "Move or delete this column's Work Items before deleting it.");
+    }
+
+    await db.delete(stages).where(eq(stages.id, stage.id));
+
+    revalidatePath(`/projects/${input.projectPublicId}`);
   });
 }

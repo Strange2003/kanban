@@ -228,10 +228,10 @@ que no hay tope.
 
 **Depends on**: Phase 4 (necesita un proyecto) y Phase 3.
 
-- [ ] T058 [F1-US2] Implementar Server Action `sendInvitation` en `lib/actions/accounts-invitations.ts` (validación de formato de email, `ALREADY_MEMBER`/`ALREADY_INVITED`, `requireProjectOwner` — FR-005/FR-006/FR-009/FR-012/FR-013)
-- [ ] T059 [F1-US2] Implementar el rate limit de invitaciones (máx. 20/hora por `invitedByUserId`, FR-017) como conteo por query dentro de `sendInvitation`
-- [ ] T060 [P] [F1-US2] Crear `components/board/InviteMemberDialog.tsx` (input de email) accesible desde la configuración del proyecto
-- [ ] T061 [P] [F1-US2] Test e2e: invitar repetidamente sin tope, rechazo al reinvitar a un miembro existente, y rechazo al superar el rate limit de velocidad (FR-017), en `tests/e2e/invitations.spec.ts` (quickstart.md bloque 1, paso 4)
+- [X] T058 [F1-US2] Implementar Server Action `sendInvitation` en `lib/actions/accounts-invitations.ts` (validación de formato de email, `ALREADY_MEMBER`/`ALREADY_INVITED`, `requireProjectOwner` — FR-005/FR-006/FR-009/FR-012/FR-013)
+- [X] T059 [F1-US2] Implementar el rate limit de invitaciones (máx. 20/hora por `invitedByUserId`, FR-017) como conteo por query dentro de `sendInvitation`
+- [X] T060 [P] [F1-US2] Crear `components/board/InviteMemberDialog.tsx` (input de email) accesible desde la configuración del proyecto
+- [X] T061 [P] [F1-US2] Test e2e: invitar repetidamente sin tope, rechazo al reinvitar a un miembro existente, y rechazo al superar el rate limit de velocidad (FR-017), en `tests/e2e/invitations.spec.ts` (quickstart.md bloque 1, paso 4)
 
 ---
 
@@ -244,11 +244,11 @@ verificar que el proyecto pasa a "Compartido" para todos.
 
 **Depends on**: Phase 10.
 
-- [ ] T062 [F1-US3] Implementar Server Action `listMyNotifications` en `lib/actions/accounts-invitations.ts` (FR-006)
-- [ ] T063 [F1-US3] Implementar la rama `accept` de `respondToInvitation` en `lib/actions/accounts-invitations.ts` (FR-008: crea `project_members`, marca la notificación leída)
-- [ ] T064 [P] [F1-US3] Crear `components/sidebar/NotificationsPanel.tsx` listando invitaciones pendientes con acción de Aceptar
-- [ ] T065 [F1-US3] Integrar `NotificationsPanel` en `app/(workspace)/layout.tsx` (ej. accesible desde un ícono de campana en el header), análogo a como T042 integra `ProjectSidebar`
-- [ ] T066 [P] [F1-US3] Test e2e: ver notificación, aceptar, verificar reclasificación a Compartido para ambas cuentas, en `tests/e2e/invitations.spec.ts` (quickstart.md bloque 1, pasos 5-6)
+- [X] T062 [F1-US3] Implementar Server Action `listMyNotifications` en `lib/actions/accounts-invitations.ts` (FR-006)
+- [X] T063 [F1-US3] Implementar la rama `accept` de `respondToInvitation` en `lib/actions/accounts-invitations.ts` (FR-008: crea `project_members`, marca la notificación leída)
+- [X] T064 [P] [F1-US3] Crear `components/sidebar/NotificationsPanel.tsx` listando invitaciones pendientes con acción de Aceptar
+- [X] T065 [F1-US3] Integrar `NotificationsPanel` en `app/(workspace)/layout.tsx` (ej. accesible desde un ícono de campana en el header), análogo a como T042 integra `ProjectSidebar`
+- [X] T066 [P] [F1-US3] Test e2e: ver notificación, aceptar, verificar reclasificación a Compartido para ambas cuentas, en `tests/e2e/invitations.spec.ts` (quickstart.md bloque 1, pasos 5-6)
 
 **Checkpoint**: colaboración multi-usuario funcional de punta a punta.
 
@@ -265,9 +265,9 @@ nueva contraseña.
 
 **Depends on**: Phase 3.
 
-- [ ] T067 [F1-US5] Verificar que el flujo de recuperación de contraseña de Better Auth (callback `sendResetPassword` de T024, configurado en T021) cumple FR-016 (respuesta sin revelar si el email existe); ajustar el mensaje de la UI en `app/(auth)/forgot-password/page.tsx` si hace falta
-- [ ] T068 [P] [F1-US5] Crear `app/(auth)/forgot-password/page.tsx` y `app/(auth)/reset-password/page.tsx`
-- [ ] T069 [P] [F1-US5] Test e2e: solicitar reset, seguir el enlace, definir nueva contraseña (≥8 caracteres), iniciar sesión con ella; además caso negativo: enlace ya usado o vencido es rechazado, en `tests/e2e/accounts.spec.ts` (Historia 5 de 001)
+- [X] T067 [F1-US5] Verificar que el flujo de recuperación de contraseña de Better Auth (callback `sendResetPassword` de T024, configurado en T021) cumple FR-016 (respuesta sin revelar si el email existe); ajustar el mensaje de la UI en `app/(auth)/forgot-password/page.tsx` si hace falta
+- [X] T068 [P] [F1-US5] Crear `app/(auth)/forgot-password/page.tsx` y `app/(auth)/reset-password/page.tsx`
+- [X] T069 [P] [F1-US5] Test e2e: solicitar reset, seguir el enlace, definir nueva contraseña (≥8 caracteres), iniciar sesión con ella; además caso negativo: enlace ya usado o vencido es rechazado, en `tests/e2e/accounts.spec.ts` (Historia 5 de 001)
 
 ---
 
@@ -280,11 +280,11 @@ para todos los miembros.
 
 **Depends on**: Phase 4.
 
-- [ ] T070 [F2-US3] Implementar Server Action `renameProject` en `lib/actions/projects.ts` (FR-005, `requireProjectOwner`)
-- [ ] T071 [P] [F2-US3] Agregar control de renombrado a `app/(workspace)/projects/[projectPublicId]/settings/page.tsx`
-- [ ] T072 [F2-US3] Implementar Server Action `updateProjectDescription` en `lib/actions/projects.ts` (FR-009, `requireProjectOwner`)
-- [ ] T073 [P] [F2-US3] Agregar control de edición de descripción a `app/(workspace)/projects/[projectPublicId]/settings/page.tsx`
-- [ ] T074 [P] [F2-US3] Test e2e: el owner renombra y el resto de los miembros ve el nuevo nombre; un no-owner intenta renombrar y es rechazado, en `tests/e2e/projects.spec.ts` (quickstart.md bloque 2, paso 4; ver Historia 3 de 002, Acceptance Scenario 2 agregado en /speckit-analyze)
+- [X] T070 [F2-US3] Implementar Server Action `renameProject` en `lib/actions/projects.ts` (FR-005, `requireProjectOwner`)
+- [X] T071 [P] [F2-US3] Agregar control de renombrado a `app/(workspace)/projects/[projectPublicId]/settings/page.tsx`
+- [X] T072 [F2-US3] Implementar Server Action `updateProjectDescription` en `lib/actions/projects.ts` (FR-009, `requireProjectOwner`)
+- [X] T073 [P] [F2-US3] Agregar control de edición de descripción a `app/(workspace)/projects/[projectPublicId]/settings/page.tsx`
+- [X] T074 [P] [F2-US3] Test e2e: el owner renombra y el resto de los miembros ve el nuevo nombre; un no-owner intenta renombrar y es rechazado, en `tests/e2e/projects.spec.ts` (quickstart.md bloque 2, paso 4; ver Historia 3 de 002, Acceptance Scenario 2 agregado en /speckit-analyze)
 
 ---
 
@@ -297,9 +297,9 @@ miembros) y verificar que desaparece para todos.
 
 **Depends on**: Phase 4.
 
-- [ ] T075 [F2-US4] Implementar Server Action `deleteProject` en `lib/actions/projects.ts` (FR-006/FR-007, `requireProjectOwner`, confía en los `onDelete: cascade` del esquema)
-- [ ] T076 [P] [F2-US4] Crear `components/sidebar/DeleteProjectDialog.tsx` con confirmación explícita, integrado en la página de configuración
-- [ ] T077 [P] [F2-US4] Test e2e: un no-owner no puede eliminar; el owner elimina con confirmación y desaparece para todos, en `tests/e2e/projects.spec.ts` (quickstart.md bloque 2, pasos 5 y 7)
+- [X] T075 [F2-US4] Implementar Server Action `deleteProject` en `lib/actions/projects.ts` (FR-006/FR-007, `requireProjectOwner`, confía en los `onDelete: cascade` del esquema)
+- [X] T076 [P] [F2-US4] Crear `components/sidebar/DeleteProjectDialog.tsx` con confirmación explícita, integrado en la página de configuración
+- [X] T077 [P] [F2-US4] Test e2e: un no-owner no puede eliminar; el owner elimina con confirmación y desaparece para todos, en `tests/e2e/projects.spec.ts` (quickstart.md bloque 2, pasos 5 y 7)
 
 ---
 
@@ -312,9 +312,9 @@ verificar que aparece filtrado.
 
 **Depends on**: Phase 5.
 
-- [ ] T078 [F2-US5] Extender `listMyProjects` para aceptar y aplicar un filtro `search` por nombre (FR-011)
-- [ ] T079 [P] [F2-US5] Agregar input de búsqueda a `components/sidebar/ProjectSidebar.tsx` con filtrado en vivo y estado vacío de "sin resultados"
-- [ ] T080 [P] [F2-US5] Test e2e: la búsqueda filtra, al borrar el texto se restaura la lista completa, en `tests/e2e/projects.spec.ts` (quickstart.md bloque 2, paso 3)
+- [X] T078 [F2-US5] Extender `listMyProjects` para aceptar y aplicar un filtro `search` por nombre (FR-011)
+- [X] T079 [P] [F2-US5] Agregar input de búsqueda a `components/sidebar/ProjectSidebar.tsx` con filtrado en vivo y estado vacío de "sin resultados"
+- [X] T080 [P] [F2-US5] Test e2e: la búsqueda filtra, al borrar el texto se restaura la lista completa, en `tests/e2e/projects.spec.ts` (quickstart.md bloque 2, paso 3)
 
 ---
 
@@ -327,9 +327,9 @@ verificar pérdida de acceso inmediata.
 
 **Depends on**: Phase 11 (necesita al menos un miembro invitado/aceptado).
 
-- [ ] T081 [F2-US7] Implementar Server Action `removeMember` en `lib/actions/projects.ts` (FR-012/FR-014: `requireProjectOwner`, guarda `CANNOT_REMOVE_OWNER`)
-- [ ] T082 [P] [F2-US7] Agregar lista de miembros + acción "Remover" a la página de configuración, visible solo para el owner
-- [ ] T083 [P] [F2-US7] Test e2e: el owner remueve a un miembro (pierde acceso de inmediato y, si queda un único miembro, el proyecto se reclasifica a "Personal"); un no-owner no puede remover, en `tests/e2e/projects.spec.ts` (Historia 7 de 002, FR-015 de 002)
+- [X] T081 [F2-US7] Implementar Server Action `removeMember` en `lib/actions/projects.ts` (FR-012/FR-014: `requireProjectOwner`, guarda `CANNOT_REMOVE_OWNER`)
+- [X] T082 [P] [F2-US7] Agregar lista de miembros + acción "Remover" a la página de configuración, visible solo para el owner
+- [X] T083 [P] [F2-US7] Test e2e: el owner remueve a un miembro (pierde acceso de inmediato y, si queda un único miembro, el proyecto se reclasifica a "Personal"); un no-owner no puede remover, en `tests/e2e/projects.spec.ts` (Historia 7 de 002, FR-015 de 002)
 
 ---
 
@@ -342,10 +342,10 @@ el nuevo orden persiste al recargar.
 
 **Depends on**: Phase 7.
 
-- [ ] T084 [F3-US3] Implementar Server Action `reorderStages` en `lib/actions/board.ts` (FR-005/FR-011: reescritura transaccional de `position`)
-- [ ] T085 [F3-US3] Agregar comportamiento sortable horizontal de dnd-kit a `components/board/Board.tsx` para reordenar `StageColumn`
-- [ ] T086 [F3-US3] Implementar reordenamiento optimista con reversión + aviso de error ante fallo de guardado (FR-011, Clarifications de 003)
-- [ ] T087 [P] [F3-US3] Test e2e: reordenar columnas y verificar persistencia para otros miembros; simular fallo de guardado y verificar reversión, en `tests/e2e/board.spec.ts` (quickstart.md bloque 3, paso 3)
+- [X] T084 [F3-US3] Implementar Server Action `reorderStages` en `lib/actions/board.ts` (FR-005/FR-011: reescritura transaccional de `position`)
+- [X] T085 [F3-US3] Agregar comportamiento sortable horizontal de dnd-kit a `components/board/Board.tsx` para reordenar `StageColumn`
+- [X] T086 [F3-US3] Implementar reordenamiento optimista con reversión + aviso de error ante fallo de guardado (FR-011, Clarifications de 003)
+- [X] T087 [P] [F3-US3] Test e2e: reordenar columnas y verificar persistencia para otros miembros; simular fallo de guardado y verificar reversión, en `tests/e2e/board.spec.ts` (quickstart.md bloque 3, paso 3)
 
 ---
 
@@ -358,9 +358,9 @@ contenido (bloqueada).
 
 **Depends on**: Phase 7, Phase 8 (para probar el caso con contenido).
 
-- [ ] T088 [F3-US4] Implementar Server Action `deleteStage` en `lib/actions/board.ts` (FR-006/FR-007: guarda `STAGE_NOT_EMPTY` si existen `work_items` asociados)
-- [ ] T089 [P] [F3-US4] Agregar control de eliminación a `components/board/StageColumn.tsx` con mensaje de bloqueo cuando no está vacía
-- [ ] T090 [P] [F3-US4] Test e2e: eliminar columna vacía (éxito) y con Work Items (bloqueada, con mensaje), en `tests/e2e/board.spec.ts` (quickstart.md bloque 3, pasos 4-5)
+- [X] T088 [F3-US4] Implementar Server Action `deleteStage` en `lib/actions/board.ts` (FR-006/FR-007: guarda `STAGE_NOT_EMPTY` si existen `work_items` asociados)
+- [X] T089 [P] [F3-US4] Agregar control de eliminación a `components/board/StageColumn.tsx` con mensaje de bloqueo cuando no está vacía
+- [X] T090 [P] [F3-US4] Test e2e: eliminar columna vacía (éxito) y con Work Items (bloqueada, con mensaje), en `tests/e2e/board.spec.ts` (quickstart.md bloque 3, pasos 4-5)
 
 ---
 
@@ -373,13 +373,13 @@ verificar que persiste al reabrirlo.
 
 **Depends on**: Phase 8.
 
-- [ ] T091 [F4-US3] Implementar Server Action `updateWorkItem` en `lib/actions/work-items.ts` (FR-007/FR-008/FR-009/FR-012/FR-013: descripción como texto plano, stakeholder de texto libre, resolución/creación de tags del catálogo; registra una fila en `work_item_activity` con `type='fields_edited'` y el detalle de qué campos cambiaron, per Estándares de Producto y Datos § Auditoría de la constitución)
-- [ ] T092 [F4-US3] Implementar Server Action `listProjectTags` en `lib/actions/work-items.ts`
-- [ ] T093 [P] [F4-US3] Crear `components/work-items/WorkItemDetailPanel.tsx` (campos título, descripción, stakeholder)
-- [ ] T094 [P] [F4-US3] Crear `components/work-items/TagPicker.tsx` que soporta elegir tags existentes y crear uno nuevo en línea (FR-012)
-- [ ] T095 [F4-US3] Implementar Server Action `listWorkItemActivity` en `lib/actions/work-items.ts` (Estándares de Producto y Datos § Auditoría de la constitución)
-- [ ] T096 [P] [F4-US3] Mostrar el historial de `work_item_activity` (vía `listWorkItemActivity`) en `components/work-items/WorkItemDetailPanel.tsx`, más reciente primero (Estándares de Producto y Datos § Auditoría de la constitución)
-- [ ] T097 [P] [F4-US3] Test e2e: editar descripción/stakeholder, agregar tag existente, crear tag nuevo en línea y verificar disponibilidad en todo el proyecto; verificar que cada cambio queda visible en el historial de actividad del Work Item, en `tests/e2e/work-items.spec.ts` (quickstart.md bloque 4, paso 4)
+- [X] T091 [F4-US3] Implementar Server Action `updateWorkItem` en `lib/actions/work-items.ts` (FR-007/FR-008/FR-009/FR-012/FR-013: descripción como texto plano, stakeholder de texto libre, resolución/creación de tags del catálogo; registra una fila en `work_item_activity` con `type='fields_edited'` y el detalle de qué campos cambiaron, per Estándares de Producto y Datos § Auditoría de la constitución)
+- [X] T092 [F4-US3] Implementar Server Action `listProjectTags` en `lib/actions/work-items.ts`
+- [X] T093 [P] [F4-US3] Crear `components/work-items/WorkItemDetailPanel.tsx` (campos título, descripción, stakeholder)
+- [X] T094 [P] [F4-US3] Crear `components/work-items/TagPicker.tsx` que soporta elegir tags existentes y crear uno nuevo en línea (FR-012)
+- [X] T095 [F4-US3] Implementar Server Action `listWorkItemActivity` en `lib/actions/work-items.ts` (Estándares de Producto y Datos § Auditoría de la constitución)
+- [X] T096 [P] [F4-US3] Mostrar el historial de `work_item_activity` (vía `listWorkItemActivity`) en `components/work-items/WorkItemDetailPanel.tsx`, más reciente primero (Estándares de Producto y Datos § Auditoría de la constitución)
+- [X] T097 [P] [F4-US3] Test e2e: editar descripción/stakeholder, agregar tag existente, crear tag nuevo en línea y verificar disponibilidad en todo el proyecto; verificar que cada cambio queda visible en el historial de actividad del Work Item, en `tests/e2e/work-items.spec.ts` (quickstart.md bloque 4, paso 4)
 
 ---
 
@@ -392,9 +392,9 @@ desaparece del tablero para todos.
 
 **Depends on**: Phase 8.
 
-- [ ] T098 [F4-US4] Implementar Server Action `deleteWorkItem` en `lib/actions/work-items.ts` (FR-010/FR-011)
-- [ ] T099 [P] [F4-US4] Agregar control de eliminación con confirmación a `WorkItemDetailPanel`
-- [ ] T100 [P] [F4-US4] Test e2e: eliminar un Work Item, verificar que desaparece para todos los miembros, en `tests/e2e/work-items.spec.ts` (quickstart.md bloque 4, paso 5)
+- [X] T098 [F4-US4] Implementar Server Action `deleteWorkItem` en `lib/actions/work-items.ts` (FR-010/FR-011)
+- [X] T099 [P] [F4-US4] Agregar control de eliminación con confirmación a `WorkItemDetailPanel`
+- [X] T100 [P] [F4-US4] Test e2e: eliminar un Work Item, verificar que desaparece para todos los miembros, en `tests/e2e/work-items.spec.ts` (quickstart.md bloque 4, paso 5)
 
 ---
 

@@ -1,8 +1,15 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { z } from "zod";
 import { db } from "@/db/client";
-import { invitations, notifications } from "@/db/schema";
+import { invitations, notifications, projectMembers, projects } from "@/db/schema";
+import { user } from "@/db/auth-schema";
+import { getSession } from "@/lib/auth";
+import { requireProjectOwner } from "@/lib/permissions";
+import { generatePublicId } from "@/lib/ids";
+import { AppError, runAction, type Result } from "@/lib/errors";
 
 /**
  * Applies any pending invitation addressed to `email` to the now-verified
@@ -26,4 +33,163 @@ export async function applyPendingInvitationsForUser(userId: string, email: stri
       payload: { invitationId: invitation.publicId, projectId: invitation.projectId },
     });
   }
+}
+
+const RATE_LIMIT_MAX_PER_HOUR = 20; // FR-017 of 001; see Manual Action #7 of plan.md to tune.
+
+const sendInvitationSchema = z.object({
+  email: z.email("Enter a valid email address."),
+});
+
+// FR-005/FR-006/FR-007/FR-009/FR-012/FR-013/FR-017 of 001-accounts-invitations
+export async function sendInvitation(input: {
+  projectPublicId: string;
+  email: string;
+}): Promise<Result<typeof invitations.$inferSelect>> {
+  return runAction(async () => {
+    const { session, project } = await requireProjectOwner(input.projectPublicId);
+
+    const parsed = sendInvitationSchema.safeParse({ email: input.email });
+    if (!parsed.success) {
+      throw new AppError("INVALID_EMAIL", parsed.error.issues[0]?.message ?? "Enter a valid email address.");
+    }
+    const email = parsed.data.email;
+
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const [recentCount] = await db
+      .select({ count: sql<number>`count(*)`.mapWith(Number) })
+      .from(invitations)
+      .where(and(eq(invitations.invitedByUserId, session.user.id), gte(invitations.createdAt, oneHourAgo)));
+    if ((recentCount?.count ?? 0) >= RATE_LIMIT_MAX_PER_HOUR) {
+      throw new AppError("RATE_LIMITED", "You've sent too many invitations. Try again in a bit.");
+    }
+
+    const [existingUser] = await db.select().from(user).where(eq(user.email, email)).limit(1);
+    if (existingUser) {
+      const [membership] = await db
+        .select()
+        .from(projectMembers)
+        .where(and(eq(projectMembers.projectId, project.id), eq(projectMembers.userId, existingUser.id)))
+        .limit(1);
+      if (membership) throw new AppError("ALREADY_MEMBER", "This person is already a member of the project.");
+    }
+
+    const [existingInvite] = await db
+      .select()
+      .from(invitations)
+      .where(
+        and(
+          eq(invitations.projectId, project.id),
+          eq(invitations.invitedEmail, email),
+          eq(invitations.status, "pending"),
+        ),
+      )
+      .limit(1);
+    if (existingInvite) throw new AppError("ALREADY_INVITED", "This email already has a pending invitation.");
+
+    const [created] = await db
+      .insert(invitations)
+      .values({
+        publicId: generatePublicId(),
+        projectId: project.id,
+        invitedEmail: email,
+        invitedByUserId: session.user.id,
+        status: "pending",
+      })
+      .returning();
+    if (!created) throw new AppError("UNKNOWN_ERROR", "Could not create the invitation.");
+
+    // FR-007: only notify immediately if the account already exists and is verified —
+    // otherwise applyPendingInvitationsForUser picks it up on signup/verification.
+    if (existingUser?.emailVerified) {
+      await db.insert(notifications).values({
+        userId: existingUser.id,
+        type: "invitation",
+        payload: { invitationId: created.publicId, projectId: project.id },
+      });
+    }
+
+    revalidatePath(`/projects/${input.projectPublicId}/settings`);
+    return created;
+  });
+}
+
+// FR-008 of 001-accounts-invitations. Only the "accept" branch — rejecting is
+// a separate, later task (T101) since it's P3 scope.
+export async function respondToInvitation(input: { invitationId: string }): Promise<Result<void>> {
+  return runAction(async () => {
+    const session = await getSession();
+    if (!session) throw new AppError("UNAUTHENTICATED", "You must be signed in.");
+
+    const [invitation] = await db
+      .select()
+      .from(invitations)
+      .where(eq(invitations.publicId, input.invitationId))
+      .limit(1);
+    if (!invitation) throw new AppError("NOT_FOUND", "Invitation not found.");
+    if (invitation.invitedEmail !== session.user.email) {
+      throw new AppError("FORBIDDEN", "This invitation isn't addressed to you.");
+    }
+    if (invitation.status !== "pending") {
+      throw new AppError("INVITATION_NOT_PENDING", "This invitation has already been resolved.");
+    }
+
+    await db.transaction(async (tx) => {
+      await tx.insert(projectMembers).values({
+        projectId: invitation.projectId,
+        userId: session.user.id,
+        role: "member",
+      });
+      await tx
+        .update(invitations)
+        .set({ status: "accepted", respondedAt: new Date() })
+        .where(eq(invitations.id, invitation.id));
+      await tx
+        .update(notifications)
+        .set({ readAt: new Date() })
+        .where(
+          and(
+            eq(notifications.userId, session.user.id),
+            eq(sql<string>`${notifications.payload}->>'invitationId'`, invitation.publicId),
+          ),
+        );
+    });
+
+    revalidatePath("/");
+  });
+}
+
+export type NotificationWithInvitation = {
+  id: number;
+  createdAt: Date;
+  invitationPublicId: string;
+  projectPublicId: string;
+  projectName: string;
+  invitedByName: string;
+};
+
+// FR-006 of 001-accounts-invitations, US3
+export async function listMyNotifications(): Promise<Result<NotificationWithInvitation[]>> {
+  return runAction(async () => {
+    const session = await getSession();
+    if (!session) throw new AppError("UNAUTHENTICATED", "You must be signed in.");
+
+    const rows = await db
+      .select({
+        id: notifications.id,
+        createdAt: notifications.createdAt,
+        invitationPublicId: invitations.publicId,
+        projectPublicId: projects.publicId,
+        projectName: projects.name,
+        invitedByName: user.name,
+      })
+      .from(notifications)
+      .innerJoin(invitations, eq(invitations.publicId, sql<string>`${notifications.payload}->>'invitationId'`))
+      .innerJoin(projects, eq(projects.id, invitations.projectId))
+      .innerJoin(user, eq(user.id, invitations.invitedByUserId))
+      .where(and(eq(notifications.userId, session.user.id), sql`${notifications.readAt} is null`))
+      .orderBy(desc(notifications.createdAt));
+
+    return rows;
+  });
 }

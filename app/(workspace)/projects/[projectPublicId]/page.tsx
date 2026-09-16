@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
+import { Settings } from "lucide-react";
 import { getBoard } from "@/lib/actions/board";
 import { Board } from "@/components/board/Board";
 
@@ -16,10 +18,21 @@ export default async function ProjectBoardPage({
   }
 
   return (
-    <Board
-      projectPublicId={projectPublicId}
-      initialStages={result.data.stages}
-      initialWorkItems={result.data.workItems}
-    />
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex justify-end border-b border-border px-4 py-2">
+        <Link
+          href={`/projects/${projectPublicId}/settings`}
+          aria-label="Project settings"
+          className="hover:bg-accent hover:text-accent-foreground inline-flex h-9 w-9 items-center justify-center rounded-md"
+        >
+          <Settings className="h-4 w-4" />
+        </Link>
+      </div>
+      <Board
+        projectPublicId={projectPublicId}
+        initialStages={result.data.stages}
+        initialWorkItems={result.data.workItems}
+      />
+    </div>
   );
 }

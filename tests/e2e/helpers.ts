@@ -1,8 +1,19 @@
 import { expect, type Page } from "@playwright/test";
+import { eq } from "drizzle-orm";
+import { db } from "@/db/client";
+import { user } from "@/db/auth-schema";
 
 let counter = 0;
 
-/** Registers a fresh account via email/password and leaves `page` signed in. Returns its email. */
+/**
+ * Registers a fresh account via email/password and leaves `page` signed in.
+ * Returns its email.
+ *
+ * `requireEmailVerification: true` (FR-015 of 001-accounts-invitations)
+ * means sign-up alone doesn't create a session — there's no real inbox in
+ * this suite, so mark the account verified directly in the DB (exactly what
+ * following the emailed link would flip) before signing in for real.
+ */
 export async function signUpNewUser(page: Page, namePrefix = "Test User"): Promise<string> {
   counter += 1;
   const email = `test-${Date.now()}-${counter}@example.com`;
@@ -13,6 +24,14 @@ export async function signUpNewUser(page: Page, namePrefix = "Test User"): Promi
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page.getByRole("button", { name: "Creating account..." })).toBeHidden();
+
+  await db.update(user).set({ emailVerified: true }).where(eq(user.email, email));
+
+  await page.goto("/sign-in");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL("/");
 
   return email;
