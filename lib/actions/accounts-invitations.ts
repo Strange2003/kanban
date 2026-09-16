@@ -7,7 +7,7 @@ import { db } from "@/db/client";
 import { invitations, notifications, projectMembers, projects } from "@/db/schema";
 import { user } from "@/db/auth-schema";
 import { getSession } from "@/lib/auth";
-import { requireProjectOwner } from "@/lib/permissions";
+import { requireProjectMember, requireProjectOwner } from "@/lib/permissions";
 import { generatePublicId } from "@/lib/ids";
 import { AppError, runAction, type Result } from "@/lib/errors";
 
@@ -114,9 +114,11 @@ export async function sendInvitation(input: {
   });
 }
 
-// FR-008 of 001-accounts-invitations. Only the "accept" branch — rejecting is
-// a separate, later task (T101) since it's P3 scope.
-export async function respondToInvitation(input: { invitationId: string }): Promise<Result<void>> {
+// FR-008/FR-010 of 001-accounts-invitations
+export async function respondToInvitation(input: {
+  invitationId: string;
+  action: "accept" | "reject";
+}): Promise<Result<void>> {
   return runAction(async () => {
     const session = await getSession();
     if (!session) throw new AppError("UNAUTHENTICATED", "You must be signed in.");
@@ -135,14 +137,16 @@ export async function respondToInvitation(input: { invitationId: string }): Prom
     }
 
     await db.transaction(async (tx) => {
-      await tx.insert(projectMembers).values({
-        projectId: invitation.projectId,
-        userId: session.user.id,
-        role: "member",
-      });
+      if (input.action === "accept") {
+        await tx.insert(projectMembers).values({
+          projectId: invitation.projectId,
+          userId: session.user.id,
+          role: "member",
+        });
+      }
       await tx
         .update(invitations)
-        .set({ status: "accepted", respondedAt: new Date() })
+        .set({ status: input.action === "accept" ? "accepted" : "rejected", respondedAt: new Date() })
         .where(eq(invitations.id, invitation.id));
       await tx
         .update(notifications)
@@ -156,6 +160,66 @@ export async function respondToInvitation(input: { invitationId: string }): Prom
     });
 
     revalidatePath("/");
+  });
+}
+
+// FR-011 of 001-accounts-invitations
+export async function cancelInvitation(input: {
+  projectPublicId: string;
+  invitationId: string;
+}): Promise<Result<void>> {
+  return runAction(async () => {
+    const { session, project, membership } = await requireProjectMember(input.projectPublicId);
+
+    const [invitation] = await db
+      .select()
+      .from(invitations)
+      .where(and(eq(invitations.publicId, input.invitationId), eq(invitations.projectId, project.id)))
+      .limit(1);
+    if (!invitation) throw new AppError("NOT_FOUND", "Invitation not found.");
+    if (invitation.invitedByUserId !== session.user.id && membership.role !== "owner") {
+      throw new AppError("FORBIDDEN", "Only the sender or the project owner can cancel this invitation.");
+    }
+    if (invitation.status !== "pending") {
+      throw new AppError("INVITATION_NOT_PENDING", "This invitation has already been resolved.");
+    }
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(invitations)
+        .set({ status: "cancelled", respondedAt: new Date() })
+        .where(eq(invitations.id, invitation.id));
+      // Drop the invitee's notification too, if one was ever created (FR-011).
+      await tx
+        .update(notifications)
+        .set({ readAt: new Date() })
+        .where(eq(sql<string>`${notifications.payload}->>'invitationId'`, invitation.publicId));
+    });
+
+    revalidatePath(`/projects/${input.projectPublicId}/settings`);
+  });
+}
+
+export type PendingInvitation = {
+  publicId: string;
+  invitedEmail: string;
+  createdAt: Date;
+};
+
+// Supports the "Cancel" action on the settings page's pending-invitations list.
+export async function listPendingInvitations(projectPublicId: string): Promise<Result<PendingInvitation[]>> {
+  return runAction(async () => {
+    const { project } = await requireProjectMember(projectPublicId);
+
+    return db
+      .select({
+        publicId: invitations.publicId,
+        invitedEmail: invitations.invitedEmail,
+        createdAt: invitations.createdAt,
+      })
+      .from(invitations)
+      .where(and(eq(invitations.projectId, project.id), eq(invitations.status, "pending")))
+      .orderBy(desc(invitations.createdAt));
   });
 }
 

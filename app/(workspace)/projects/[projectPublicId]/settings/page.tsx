@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { requireProjectMember } from "@/lib/permissions";
 import { listProjectMembers } from "@/lib/actions/projects";
+import { listPendingInvitations } from "@/lib/actions/accounts-invitations";
 import { RenameProjectForm } from "@/components/settings/RenameProjectForm";
 import { ProjectDescriptionForm } from "@/components/settings/ProjectDescriptionForm";
 import { MembersList } from "@/components/settings/MembersList";
+import { PendingInvitationsList } from "@/components/settings/PendingInvitationsList";
 import { DeleteProjectSection } from "@/components/settings/DeleteProjectSection";
+import { LeaveProjectButton } from "@/components/settings/LeaveProjectButton";
 
 // Any project member can view; individual controls gate themselves by role
 // (rename/description/delete/invite/remove are owner-only, per FR-008 of
@@ -20,6 +23,9 @@ export default async function ProjectSettingsPage({
 
   const membersResult = await listProjectMembers(projectPublicId);
   const members = membersResult.ok ? membersResult.data : [];
+
+  const pendingInvitationsResult = isOwner ? await listPendingInvitations(projectPublicId) : null;
+  const pendingInvitations = pendingInvitationsResult?.ok ? pendingInvitationsResult.data : [];
 
   return (
     <main className="mx-auto max-w-2xl space-y-8 overflow-y-auto p-8">
@@ -45,7 +51,13 @@ export default async function ProjectSettingsPage({
 
       <MembersList projectPublicId={projectPublicId} members={members} isOwner={isOwner} />
 
-      {isOwner && <DeleteProjectSection projectPublicId={projectPublicId} />}
+      {isOwner && <PendingInvitationsList projectPublicId={projectPublicId} invitations={pendingInvitations} />}
+
+      {isOwner ? (
+        <DeleteProjectSection projectPublicId={projectPublicId} />
+      ) : (
+        <LeaveProjectButton projectPublicId={projectPublicId} />
+      )}
     </main>
   );
 }

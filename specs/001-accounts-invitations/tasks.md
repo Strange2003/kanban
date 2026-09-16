@@ -408,10 +408,10 @@ ambas dejan de estar pendientes.
 
 **Depends on**: Phase 10.
 
-- [ ] T101 [F1-US4] Implementar la rama `reject` de `respondToInvitation` en `lib/actions/accounts-invitations.ts` (FR-010)
-- [ ] T102 [F1-US4] Implementar Server Action `cancelInvitation` en `lib/actions/accounts-invitations.ts` (FR-011)
-- [ ] T103 [P] [F1-US4] Agregar acción "Rechazar" a `NotificationsPanel` y "Cancelar" a la lista de invitaciones pendientes en configuración del proyecto
-- [ ] T104 [P] [F1-US4] Test e2e: el invitado rechaza, el invitador cancela, ambos casos dejan de estar pendientes, en `tests/e2e/invitations.spec.ts` (Historia 4 de 001)
+- [X] T101 [F1-US4] Implementar la rama `reject` de `respondToInvitation` en `lib/actions/accounts-invitations.ts` (FR-010)
+- [X] T102 [F1-US4] Implementar Server Action `cancelInvitation` en `lib/actions/accounts-invitations.ts` (FR-011)
+- [X] T103 [P] [F1-US4] Agregar acción "Rechazar" a `NotificationsPanel` y "Cancelar" a la lista de invitaciones pendientes en configuración del proyecto
+- [X] T104 [P] [F1-US4] Test e2e: el invitado rechaza, el invitador cancela, ambos casos dejan de estar pendientes, en `tests/e2e/invitations.spec.ts` (Historia 4 de 001)
 
 ---
 
@@ -424,9 +424,9 @@ acceso; si queda un único miembro, el proyecto vuelve a "Personal".
 
 **Depends on**: Phase 11.
 
-- [ ] T105 [F2-US6] Implementar Server Action `leaveProject` en `lib/actions/projects.ts` (FR-013/FR-014: guarda `OWNER_CANNOT_LEAVE`)
-- [ ] T106 [P] [F2-US6] Agregar control "Salir del proyecto" a la página de configuración para miembros no-owner
-- [ ] T107 [P] [F2-US6] Test e2e: un miembro sale (pierde acceso, reclasificación a Personal si queda uno solo); el owner no puede salir, en `tests/e2e/projects.spec.ts` (Historia 6 de 002)
+- [X] T105 [F2-US6] Implementar Server Action `leaveProject` en `lib/actions/projects.ts` (FR-013/FR-014: guarda `OWNER_CANNOT_LEAVE`)
+- [X] T106 [P] [F2-US6] Agregar control "Salir del proyecto" a la página de configuración para miembros no-owner
+- [X] T107 [P] [F2-US6] Test e2e: un miembro sale (pierde acceso, reclasificación a Personal si queda uno solo); el owner no puede salir, en `tests/e2e/projects.spec.ts` (Historia 6 de 002)
 
 ---
 
@@ -439,9 +439,9 @@ para todos los miembros.
 
 **Depends on**: Phase 7.
 
-- [ ] T108 [F3-US5] Implementar Server Action `renameStage` en `lib/actions/board.ts` (FR-008)
-- [ ] T109 [P] [F3-US5] Agregar edición en línea (doble clic o ícono de editar) a `components/board/StageColumn.tsx`
-- [ ] T110 [P] [F3-US5] Test e2e: renombrar una columna, verificar el cambio para todos los miembros, en `tests/e2e/board.spec.ts` (Historia 5 de 003)
+- [X] T108 [F3-US5] Implementar Server Action `renameStage` en `lib/actions/board.ts` (FR-008)
+- [X] T109 [P] [F3-US5] Agregar edición en línea (doble clic o ícono de editar) a `components/board/StageColumn.tsx`
+- [X] T110 [P] [F3-US5] Test e2e: renombrar una columna, verificar el cambio para todos los miembros, en `tests/e2e/board.spec.ts` (Historia 5 de 003)
 
 ---
 
@@ -455,9 +455,9 @@ misma columna y verificar que el orden persiste.
 
 **Depends on**: Phase 8.
 
-- [ ] T111 [F4-US5] Implementar Server Action `reorderWorkItemsInStage` en `lib/actions/work-items.ts` (FR-006)
-- [ ] T112 [F4-US5] Extender el contexto sortable de dnd-kit en `components/board/StageColumn.tsx` para reordenamiento vertical dentro de la columna
-- [ ] T113 [P] [F4-US5] Test e2e: reordenar Work Items dentro de una columna, verificar persistencia para otros miembros, en `tests/e2e/work-items.spec.ts` (Historia 5 de 004)
+- [X] T111 [F4-US5] Implementar Server Action `reorderWorkItemsInStage` en `lib/actions/work-items.ts` (FR-006)
+- [X] T112 [F4-US5] Extender el contexto sortable de dnd-kit en `components/board/StageColumn.tsx` para reordenamiento vertical dentro de la columna
+- [X] T113 [P] [F4-US5] Test e2e: reordenar Work Items dentro de una columna, verificar persistencia para otros miembros, en `tests/e2e/work-items.spec.ts` (Historia 5 de 004)
 
 ---
 

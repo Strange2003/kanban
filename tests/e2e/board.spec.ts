@@ -83,4 +83,21 @@ test.describe("Kanban board", () => {
     await emptyColumn.getByRole("button", { name: "Delete column" }).click();
     await expect(page.getByRole("heading", { name: "Empty column", level: 3 })).toBeHidden();
   });
+
+  // Historia 5 de 003-kanban-board (T110).
+  test("renames a column via double-click, and the new name shows for everyone", async ({ page }) => {
+    await signUpNewUser(page);
+    await createProjectViaUi(page, "Tablero Demo");
+    await addColumn(page, "Old column name");
+
+    await page.getByRole("heading", { name: "Old column name", level: 3 }).dblclick();
+    const input = page.getByRole("textbox");
+    await input.fill("New column name");
+    await input.press("Enter");
+
+    await expect(page.getByRole("heading", { name: "New column name", level: 3 })).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "New column name", level: 3 })).toBeVisible();
+  });
 });

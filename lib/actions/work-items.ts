@@ -130,6 +130,33 @@ export async function moveWorkItem(input: {
   });
 }
 
+// FR-006 of 004-work-items
+export async function reorderWorkItemsInStage(input: {
+  stageId: number;
+  orderedWorkItemIds: number[];
+}): Promise<Result<void>> {
+  return runAction(async () => {
+    const [stage] = await db.select().from(stages).where(eq(stages.id, input.stageId)).limit(1);
+    if (!stage) throw new AppError("NOT_FOUND", "Column not found.");
+
+    const [project] = await db.select().from(projects).where(eq(projects.id, stage.projectId)).limit(1);
+    if (!project) throw new AppError("NOT_FOUND", "Project not found.");
+
+    await requireProjectMember(project.publicId);
+
+    await db.transaction(async (tx) => {
+      for (const [index, workItemId] of input.orderedWorkItemIds.entries()) {
+        await tx
+          .update(workItems)
+          .set({ position: index, updatedAt: new Date() })
+          .where(and(eq(workItems.id, workItemId), eq(workItems.stageId, input.stageId)));
+      }
+    });
+
+    revalidatePath(`/projects/${project.publicId}`);
+  });
+}
+
 const updateWorkItemSchema = z.object({
   title: z.string().trim().min(1, "Title is required.").optional(),
   description: z.string().optional(),

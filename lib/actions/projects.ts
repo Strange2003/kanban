@@ -196,6 +196,23 @@ export async function removeMember(input: { projectPublicId: string; userId: str
   });
 }
 
+// FR-013/FR-014 of 002-project-spaces
+export async function leaveProject(projectPublicId: string): Promise<Result<void>> {
+  return runAction(async () => {
+    const { session, project, membership } = await requireProjectMember(projectPublicId);
+
+    if (membership.role === "owner") {
+      throw new AppError("OWNER_CANNOT_LEAVE", "Transfer ownership or delete the project instead of leaving it.");
+    }
+
+    await db
+      .delete(projectMembers)
+      .where(and(eq(projectMembers.projectId, project.id), eq(projectMembers.userId, session.user.id)));
+
+    revalidatePath("/");
+  });
+}
+
 export type ProjectMemberWithUser = {
   userId: string;
   role: "owner" | "member";

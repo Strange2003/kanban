@@ -64,3 +64,18 @@ export async function dragWorkItemToColumn(page: Page, workItemTitle: string, co
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 10 });
   await page.mouse.up();
 }
+
+/** Drags one Work Item card onto another, for within-column reordering (FR-006 of 004-work-items). */
+export async function dragWorkItemOntoWorkItem(page: Page, sourceTitle: string, targetTitle: string) {
+  const source = page.locator('[data-testid="work-item-card"]', { hasText: sourceTitle });
+  const target = page.locator('[data-testid="work-item-card"]', { hasText: targetTitle });
+
+  const from = await source.boundingBox();
+  const to = await target.boundingBox();
+  if (!from || !to) throw new Error("Could not locate drag source/target.");
+
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 10 });
+  await page.mouse.up();
+}

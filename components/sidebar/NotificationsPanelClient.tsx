@@ -7,18 +7,18 @@ import { respondToInvitation, type NotificationWithInvitation } from "@/lib/acti
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
-// FR-006/FR-008 of 001-accounts-invitations, US3
+// FR-006/FR-008/FR-010 of 001-accounts-invitations, US3/US4
 export function NotificationsPanelClient({ notifications }: { notifications: NotificationWithInvitation[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const [respondingId, setRespondingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleAccept(invitationPublicId: string) {
+  async function handleRespond(invitationPublicId: string, action: "accept" | "reject") {
     setError(null);
-    setAcceptingId(invitationPublicId);
-    const result = await respondToInvitation({ invitationId: invitationPublicId });
-    setAcceptingId(null);
+    setRespondingId(invitationPublicId);
+    const result = await respondToInvitation({ invitationId: invitationPublicId, action });
+    setRespondingId(null);
 
     if (!result.ok) {
       setError(result.error.message);
@@ -59,13 +59,23 @@ export function NotificationsPanelClient({ notifications }: { notifications: Not
                   <strong>{notification.invitedByName}</strong> invited you to{" "}
                   <strong>{notification.projectName}</strong>
                 </span>
-                <Button
-                  size="sm"
-                  onClick={() => handleAccept(notification.invitationPublicId)}
-                  disabled={acceptingId === notification.invitationPublicId}
-                >
-                  {acceptingId === notification.invitationPublicId ? "Accepting..." : "Accept"}
-                </Button>
+                <div className="flex shrink-0 gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleRespond(notification.invitationPublicId, "reject")}
+                    disabled={respondingId === notification.invitationPublicId}
+                  >
+                    Reject
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => handleRespond(notification.invitationPublicId, "accept")}
+                    disabled={respondingId === notification.invitationPublicId}
+                  >
+                    {respondingId === notification.invitationPublicId ? "..." : "Accept"}
+                  </Button>
+                </div>
               </li>
             ))}
           </ul>

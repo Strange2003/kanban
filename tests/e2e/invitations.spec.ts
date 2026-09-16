@@ -55,4 +55,52 @@ test.describe("Invitations", () => {
     await ownerContext.close();
     await inviteeContext.close();
   });
+
+  // Historia 4 de 001-accounts-invitations (T104).
+  test("the invitee rejects an invitation, and the inviter cancels another", async ({ browser }) => {
+    const ownerContext = await browser.newContext();
+    const inviteeContext = await browser.newContext();
+    const ownerPage = await ownerContext.newPage();
+    const inviteePage = await inviteeContext.newPage();
+
+    await signUpNewUser(ownerPage, "Owner");
+    const projectUrl = await createProjectViaUi(ownerPage, "Reject Cancel Project");
+    const inviteeEmail = await signUpNewUser(inviteePage, "Invitee");
+
+    await ownerPage.goto(`${projectUrl}/settings`);
+    await ownerPage.getByRole("button", { name: "Invite" }).click();
+    await ownerPage.getByLabel("Email").fill(inviteeEmail);
+    await ownerPage.getByRole("button", { name: "Send invitation" }).click();
+    await expect(ownerPage.getByText("Invitation sent.")).toBeVisible();
+    await ownerPage.getByRole("button", { name: "Close" }).click();
+
+    // Invitee rejects (FR-010) — no longer pending, no membership created.
+    await inviteePage.goto("/");
+    await inviteePage.getByRole("button", { name: "Notifications" }).click();
+    await inviteePage.getByRole("button", { name: "Reject" }).click();
+    await expect(inviteePage.getByRole("button", { name: "Reject" })).toBeHidden();
+    await inviteePage.reload();
+    await expect(inviteePage.getByRole("link", { name: "Reject Cancel Project" })).toBeHidden();
+
+    // Owner sends a second invitation and cancels it before it's answered (FR-011).
+    const secondInviteeEmail = await signUpNewUser(inviteePage, "Second Invitee");
+    await ownerPage.goto(`${projectUrl}/settings`);
+    await ownerPage.getByRole("button", { name: "Invite" }).click();
+    await ownerPage.getByLabel("Email").fill(secondInviteeEmail);
+    await ownerPage.getByRole("button", { name: "Send invitation" }).click();
+    await expect(ownerPage.getByText("Invitation sent.")).toBeVisible();
+    await ownerPage.getByRole("button", { name: "Close" }).click();
+
+    await expect(ownerPage.getByText(secondInviteeEmail)).toBeVisible();
+    await ownerPage.getByRole("button", { name: "Cancel" }).click();
+    await expect(ownerPage.getByText(secondInviteeEmail)).toBeHidden();
+
+    // The cancelled invitation no longer shows up for the invitee either.
+    await inviteePage.goto("/");
+    await inviteePage.getByRole("button", { name: "Notifications" }).click();
+    await expect(inviteePage.getByText("Reject Cancel Project")).toBeHidden();
+
+    await ownerContext.close();
+    await inviteeContext.close();
+  });
 });

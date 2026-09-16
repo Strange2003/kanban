@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { signUpNewUser, createProjectViaUi, dragWorkItemToColumn } from "./helpers";
+import { signUpNewUser, createProjectViaUi, dragWorkItemToColumn, dragWorkItemOntoWorkItem } from "./helpers";
 
 // quickstart.md bloque 4.
 
@@ -97,5 +97,28 @@ test.describe("Work Items", () => {
     await page.getByRole("button", { name: "Confirm" }).click();
 
     await expect(page.getByText("Temporary item")).toBeHidden();
+  });
+
+  // Historia 5 de 004-work-items (T113).
+  test("reorders Work Items within a column, and it persists for other members", async ({ page }) => {
+    await signUpNewUser(page);
+    await createProjectViaUi(page, "Tablero Demo");
+    await addColumn(page, "To do");
+
+    for (const title of ["First item", "Second item", "Third item"]) {
+      await page.getByRole("button", { name: "+ Add work item" }).click();
+      await page.getByPlaceholder("Title").fill(title);
+      await page.getByRole("button", { name: "Add", exact: true }).click();
+      await expect(page.getByText(title)).toBeVisible();
+    }
+
+    const cards = page.locator('[data-testid="work-item-card"]');
+    await expect(cards).toHaveText([/First item/, /Second item/, /Third item/]);
+
+    await dragWorkItemOntoWorkItem(page, "First item", "Third item");
+    await expect(cards).toHaveText([/Second item/, /Third item/, /First item/]);
+
+    await page.reload();
+    await expect(cards).toHaveText([/Second item/, /Third item/, /First item/]);
   });
 });

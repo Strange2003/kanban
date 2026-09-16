@@ -107,6 +107,36 @@ export async function reorderStages(input: {
   });
 }
 
+const renameStageSchema = z.object({
+  name: z.string().trim().min(1, "Column name is required."),
+});
+
+// FR-008 of 003-kanban-board
+export async function renameStage(input: {
+  projectPublicId: string;
+  stageId: string;
+  name: string;
+}): Promise<Result<typeof stages.$inferSelect>> {
+  return runAction(async () => {
+    const { project } = await requireProjectMember(input.projectPublicId);
+
+    const parsed = renameStageSchema.safeParse({ name: input.name });
+    if (!parsed.success) {
+      throw new AppError("NAME_REQUIRED", parsed.error.issues[0]?.message ?? "Column name is required.");
+    }
+
+    const [updated] = await db
+      .update(stages)
+      .set({ name: parsed.data.name })
+      .where(and(eq(stages.publicId, input.stageId), eq(stages.projectId, project.id)))
+      .returning();
+    if (!updated) throw new AppError("NOT_FOUND", "Column not found.");
+
+    revalidatePath(`/projects/${input.projectPublicId}`);
+    return updated;
+  });
+}
+
 // FR-006/FR-007 of 003-kanban-board
 export async function deleteStage(input: { projectPublicId: string; stageId: string }): Promise<Result<void>> {
   return runAction(async () => {

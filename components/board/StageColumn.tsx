@@ -1,13 +1,72 @@
 "use client";
 
-import { useSortable } from "@dnd-kit/sortable";
+import { useState } from "react";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
-import type { StageWithCount } from "@/lib/actions/board";
+import { renameStage, type StageWithCount } from "@/lib/actions/board";
 import type { WorkItemWithDisplayId } from "@/lib/actions/work-items";
 import { WorkItemCard } from "@/components/board/WorkItemCard";
 import { AddWorkItemButton } from "@/components/board/AddWorkItemButton";
 import { DeleteStageButton } from "@/components/board/DeleteStageButton";
+import { Input } from "@/components/ui/input";
+
+// FR-008 of 003-kanban-board: double-click the column name to rename it in place.
+function StageName({ projectPublicId, stage }: { projectPublicId: string; stage: StageWithCount }) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(stage.name);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === stage.name) {
+      setName(stage.name);
+      setEditing(false);
+      return;
+    }
+    setSubmitting(true);
+    const result = await renameStage({ projectPublicId, stageId: stage.publicId, name: trimmed });
+    setSubmitting(false);
+    if (!result.ok) {
+      setName(stage.name);
+    }
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <form onSubmit={handleSubmit}>
+        <Input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={handleSubmit}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setName(stage.name);
+              setEditing(false);
+            }
+          }}
+          disabled={submitting}
+          className="h-7 px-2 py-1 text-sm"
+        />
+      </form>
+    );
+  }
+
+  return (
+    <h3
+      className="text-sm font-medium"
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        setEditing(true);
+      }}
+    >
+      {stage.name}
+    </h3>
+  );
+}
 
 export function StageColumn({
   projectPublicId,
@@ -44,7 +103,7 @@ export function StageColumn({
         {...listeners}
         className="flex cursor-grab items-center justify-between px-3 py-2 active:cursor-grabbing"
       >
-        <h3 className="text-sm font-medium">{stage.name}</h3>
+        <StageName projectPublicId={projectPublicId} stage={stage} />
         <div className="flex items-center gap-1">
           <span className="text-muted-foreground text-xs">{workItems.length}</span>
           <DeleteStageButton
@@ -55,9 +114,14 @@ export function StageColumn({
         </div>
       </div>
       <div className="flex flex-1 flex-col gap-2 px-2 pb-2">
-        {workItems.map((workItem) => (
-          <WorkItemCard key={workItem.id} workItem={workItem} projectPublicId={projectPublicId} />
-        ))}
+        <SortableContext
+          items={workItems.map((wi) => `work-item:${wi.id}`)}
+          strategy={verticalListSortingStrategy}
+        >
+          {workItems.map((workItem) => (
+            <WorkItemCard key={workItem.id} workItem={workItem} projectPublicId={projectPublicId} />
+          ))}
+        </SortableContext>
         <AddWorkItemButton stagePublicId={stage.publicId} />
       </div>
     </div>

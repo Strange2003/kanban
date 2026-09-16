@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useDraggable } from "@dnd-kit/core";
+import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { WorkItemWithDisplayId } from "@/lib/actions/work-items";
 import { WorkItemDetailPanel } from "@/components/work-items/WorkItemDetailPanel";
@@ -14,9 +14,12 @@ export function WorkItemCard({
   projectPublicId: string;
 }) {
   const [open, setOpen] = useState(false);
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  // Sortable (not just draggable) so it participates in both cross-column
+  // moves (FR-005 of 004) and within-column reordering (FR-006 of 004) via
+  // the same drag gesture.
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `work-item:${workItem.id}`,
-    data: { workItemId: workItem.id, stageId: workItem.stageId },
+    data: { type: "work-item", workItemId: workItem.id, stageId: workItem.stageId },
   });
 
   return (
@@ -26,7 +29,7 @@ export function WorkItemCard({
         {...listeners}
         {...attributes}
         onClick={() => setOpen(true)}
-        style={{ transform: CSS.Translate.toString(transform), opacity: isDragging ? 0.4 : 1 }}
+        style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
         className="cursor-grab touch-none rounded-md border border-border bg-background p-2 text-sm shadow-sm active:cursor-grabbing"
         data-testid="work-item-card"
       >

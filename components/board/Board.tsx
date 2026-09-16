@@ -4,7 +4,7 @@ import { useState } from "react";
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import { reorderStages, type StageWithCount } from "@/lib/actions/board";
-import { moveWorkItem, type WorkItemWithDisplayId } from "@/lib/actions/work-items";
+import { moveWorkItem, reorderWorkItemsInStage, type WorkItemWithDisplayId } from "@/lib/actions/work-items";
 import { StageColumn } from "@/components/board/StageColumn";
 import { AddStageButton } from "@/components/board/AddStageButton";
 
@@ -85,6 +85,32 @@ export function Board({
     }
   }
 
+  // FR-006 of 004-work-items, same optimistic + revert-on-failure pattern.
+  async function handleWorkItemReorder(workItemId: number, overWorkItemId: number, stageId: number) {
+    if (workItemId === overWorkItemId) return;
+
+    const stageItems = workItemsState.filter((wi) => wi.stageId === stageId).sort((a, b) => a.position - b.position);
+    const fromIndex = stageItems.findIndex((wi) => wi.id === workItemId);
+    const toIndex = stageItems.findIndex((wi) => wi.id === overWorkItemId);
+    if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return;
+
+    const reorderedIds = arrayMove(stageItems, fromIndex, toIndex).map((wi) => wi.id);
+    const previous = workItemsState;
+
+    setWorkItemsState((items) =>
+      items.map((wi) =>
+        wi.stageId === stageId ? { ...wi, position: reorderedIds.indexOf(wi.id) } : wi,
+      ),
+    );
+    setError(null);
+
+    const result = await reorderWorkItemsInStage({ stageId, orderedWorkItemIds: reorderedIds });
+    if (!result.ok) {
+      setWorkItemsState(previous);
+      setError(result.error.message);
+    }
+  }
+
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over) return;
@@ -95,13 +121,27 @@ export function Board({
     }
 
     const workItemId = active.data.current?.workItemId as number | undefined;
+    if (workItemId == null) return;
+
+    if (over.data.current?.type === "work-item") {
+      const overWorkItemId = over.data.current?.workItemId as number;
+      const overStageId = over.data.current?.stageId as number;
+      const current = workItemsState.find((wi) => wi.id === workItemId);
+      if (current?.stageId === overStageId) {
+        void handleWorkItemReorder(workItemId, overWorkItemId, overStageId);
+        return;
+      }
+      void handleWorkItemMove(workItemId, overStageId);
+      return;
+    }
+
     const toStageId = over.data.current?.stageId as number | undefined;
-    if (workItemId == null || toStageId == null) return;
+    if (toStageId == null) return;
     void handleWorkItemMove(workItemId, toStageId);
   }
 
   return (
-    <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+    <DndContext id="board-dnd" sensors={sensors} onDragEnd={handleDragEnd}>
       <div className="flex flex-1 flex-col">
         {error && <p className="text-destructive px-4 pt-2 text-sm">{error}</p>}
         <div className="flex flex-1 gap-4 overflow-x-auto p-4">
@@ -111,7 +151,9 @@ export function Board({
                 key={stage.id}
                 projectPublicId={projectPublicId}
                 stage={stage}
-                workItems={workItemsState.filter((wi) => wi.stageId === stage.id)}
+                workItems={workItemsState
+                  .filter((wi) => wi.stageId === stage.id)
+                  .sort((a, b) => a.position - b.position)}
               />
             ))}
           </SortableContext>

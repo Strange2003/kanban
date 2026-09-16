@@ -124,4 +124,50 @@ test.describe("Projects", () => {
     await ownerContext.close();
     await memberContext.close();
   });
+
+  // Historia 6 de 002-project-spaces (T107).
+  test("a member leaves a shared project (reclassifying it to Personal); the owner can't leave", async ({
+    browser,
+  }) => {
+    const ownerContext = await browser.newContext();
+    const memberContext = await browser.newContext();
+    const ownerPage = await ownerContext.newPage();
+    const memberPage = await memberContext.newPage();
+
+    await signUpNewUser(ownerPage, "Owner");
+    const projectUrl = await createProjectViaUi(ownerPage, "Leavable Project");
+    const memberEmail = await signUpNewUser(memberPage, "Member");
+
+    await ownerPage.goto(`${projectUrl}/settings`);
+    await ownerPage.getByRole("button", { name: "Invite" }).click();
+    await ownerPage.getByLabel("Email").fill(memberEmail);
+    await ownerPage.getByRole("button", { name: "Send invitation" }).click();
+    await expect(ownerPage.getByText("Invitation sent.")).toBeVisible();
+    await ownerPage.getByRole("button", { name: "Close" }).click();
+
+    await memberPage.goto("/");
+    await memberPage.getByRole("button", { name: "Notifications" }).click();
+    await memberPage.getByRole("button", { name: "Accept" }).click();
+    await memberPage.reload();
+    await expect(memberPage.getByRole("link", { name: "Leavable Project" })).toBeVisible();
+
+    // The owner has no "Leave project" control at all (FR-014).
+    await ownerPage.goto(`${projectUrl}/settings`);
+    await expect(ownerPage.getByRole("button", { name: "Leave project" })).toBeHidden();
+
+    // The member leaves voluntarily (FR-013).
+    await memberPage.goto(`${projectUrl}/settings`);
+    await memberPage.getByRole("button", { name: "Leave project" }).click();
+    await memberPage.getByRole("button", { name: "Confirm" }).click();
+    await expect(memberPage).toHaveURL("/");
+    await expect(memberPage.getByRole("link", { name: "Leavable Project" })).toBeHidden();
+
+    // Reclassified back to Personal for the owner (FR-015).
+    await ownerPage.reload();
+    await expect(ownerPage.getByRole("button", { name: "Shared" })).toBeHidden();
+    await expect(ownerPage.getByRole("link", { name: "Leavable Project" })).toBeVisible();
+
+    await ownerContext.close();
+    await memberContext.close();
+  });
 });
