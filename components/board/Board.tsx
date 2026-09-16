@@ -16,9 +16,18 @@ export function Board({
   initialStages: StageWithCount[];
   initialWorkItems: WorkItemWithDisplayId[];
 }) {
-  const [stagesState] = useState(initialStages);
   const [workItemsState, setWorkItemsState] = useState(initialWorkItems);
   const [error, setError] = useState<string | null>(null);
+
+  // `initialWorkItems` is a fresh array every time the server component
+  // re-renders (e.g. router.refresh() after creating a work item). Adjust
+  // local state during render (React's documented pattern for this) so
+  // those additions show up without a full page reload.
+  const [prevInitialWorkItems, setPrevInitialWorkItems] = useState(initialWorkItems);
+  if (initialWorkItems !== prevInitialWorkItems) {
+    setPrevInitialWorkItems(initialWorkItems);
+    setWorkItemsState(initialWorkItems);
+  }
 
   // FR-005 of 004-work-items, with the same optimistic + revert-on-failure
   // pattern already clarified for column reordering (FR-011 of
@@ -54,7 +63,7 @@ export function Board({
       <div className="flex flex-1 flex-col">
         {error && <p className="text-destructive px-4 pt-2 text-sm">{error}</p>}
         <div className="flex flex-1 gap-4 overflow-x-auto p-4">
-          {stagesState.map((stage) => (
+          {initialStages.map((stage) => (
             <StageColumn
               key={stage.id}
               stage={stage}

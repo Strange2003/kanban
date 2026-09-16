@@ -1,6 +1,9 @@
 import { Pool } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-serverless";
-import * as schema from "./schema";
+import * as appSchema from "./schema";
+import * as authSchema from "./auth-schema";
+
+const schema = { ...appSchema, ...authSchema };
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is not set. Copy .env.example to .env.local and fill it in.");
