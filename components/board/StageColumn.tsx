@@ -101,7 +101,8 @@ export function StageColumn({
       <div
         {...attributes}
         {...listeners}
-        className="flex cursor-grab items-center justify-between px-3 py-2 active:cursor-grabbing"
+        aria-label={`Drag to reorder column: ${stage.name}`}
+        className="flex cursor-grab items-center justify-between rounded-t-lg px-3 py-2 outline-none active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
         <StageName projectPublicId={projectPublicId} stage={stage} />
         <div className="flex items-center gap-1">

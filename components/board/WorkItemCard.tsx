@@ -29,8 +29,9 @@ export function WorkItemCard({
         {...listeners}
         {...attributes}
         onClick={() => setOpen(true)}
+        aria-label={`${workItem.displayId}: ${workItem.title}`}
         style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
-        className="cursor-grab touch-none rounded-md border border-border bg-background p-2 text-sm shadow-sm active:cursor-grabbing"
+        className="cursor-grab touch-none rounded-md border border-border bg-background p-2 text-sm shadow-sm outline-none active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         data-testid="work-item-card"
       >
         <span className="text-muted-foreground text-xs">{workItem.displayId}</span>

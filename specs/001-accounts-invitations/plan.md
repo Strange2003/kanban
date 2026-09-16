@@ -187,9 +187,9 @@ decisiones del usuario en paneles externos)*
 6. **Crear el repositorio remoto** (GitHub/GitLab/etc.) — el archivo
    `LICENSE` (MIT, Principio V) ya lo crea la tarea T008 de `tasks.md`, así
    que solo falta crear el repositorio remoto y subirlo.
-7. **Revisar el umbral de rate limit de invitaciones** (20/hora es un valor
-   ilustrativo de la spec, FR-017 de 001) y ajustarlo si se prefiere otro
-   número antes de implementarlo.
+7. ~~Revisar el umbral de rate limit de invitaciones~~ — **Resuelto** (T120):
+   se confirmó 20/hora, sin cambios sobre el valor ilustrativo de FR-017 de
+   001.
 
 ## Complexity Tracking
 

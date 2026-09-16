@@ -7,6 +7,7 @@ import { reorderStages, type StageWithCount } from "@/lib/actions/board";
 import { moveWorkItem, reorderWorkItemsInStage, type WorkItemWithDisplayId } from "@/lib/actions/work-items";
 import { StageColumn } from "@/components/board/StageColumn";
 import { AddStageButton } from "@/components/board/AddStageButton";
+import { useToast } from "@/components/ui/toast";
 
 export function Board({
   projectPublicId,
@@ -17,9 +18,9 @@ export function Board({
   initialStages: StageWithCount[];
   initialWorkItems: WorkItemWithDisplayId[];
 }) {
+  const { toast } = useToast();
   const [stagesState, setStagesState] = useState(initialStages);
   const [workItemsState, setWorkItemsState] = useState(initialWorkItems);
-  const [error, setError] = useState<string | null>(null);
 
   // `initialStages`/`initialWorkItems` are fresh arrays every time the server
   // component re-renders (e.g. router.refresh() after creating a column or
@@ -51,7 +52,6 @@ export function Board({
     const previous = stagesState;
     const reordered = arrayMove(stagesState, fromIndex, toIndex);
     setStagesState(reordered);
-    setError(null);
 
     const result = await reorderStages({
       projectPublicId,
@@ -59,7 +59,7 @@ export function Board({
     });
     if (!result.ok) {
       setStagesState(previous);
-      setError(result.error.message);
+      toast(result.error.message, "destructive");
     }
   }
 
@@ -76,12 +76,11 @@ export function Board({
     setWorkItemsState((items) =>
       items.map((wi) => (wi.id === workItemId ? { ...wi, stageId: toStageId, position: toPosition } : wi)),
     );
-    setError(null);
 
     const result = await moveWorkItem({ workItemId, toStageId, toPosition });
     if (!result.ok) {
       setWorkItemsState(previous);
-      setError(result.error.message);
+      toast(result.error.message, "destructive");
     }
   }
 
@@ -102,12 +101,11 @@ export function Board({
         wi.stageId === stageId ? { ...wi, position: reorderedIds.indexOf(wi.id) } : wi,
       ),
     );
-    setError(null);
 
     const result = await reorderWorkItemsInStage({ stageId, orderedWorkItemIds: reorderedIds });
     if (!result.ok) {
       setWorkItemsState(previous);
-      setError(result.error.message);
+      toast(result.error.message, "destructive");
     }
   }
 
@@ -143,7 +141,6 @@ export function Board({
   return (
     <DndContext id="board-dnd" sensors={sensors} onDragEnd={handleDragEnd}>
       <div className="flex flex-1 flex-col">
-        {error && <p className="text-destructive px-4 pt-2 text-sm">{error}</p>}
         <div className="flex flex-1 gap-4 overflow-x-auto p-4">
           <SortableContext items={stagesState.map((s) => `stage:${s.id}`)} strategy={horizontalListSortingStrategy}>
             {stagesState.map((stage) => (

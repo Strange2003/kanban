@@ -3,9 +3,9 @@
 An open-source, self-hostable Kanban board for personal and team projects — accounts, unlimited collaborators per project, and a fast, drag-and-drop board. Free to run yourself, forever.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Status: Planning](https://img.shields.io/badge/status-planning%2Fspec--driven-blue)](specs/)
+[![Status: Phase 1 complete](https://img.shields.io/badge/status-phase%201%20complete-brightgreen)](specs/)
 
-> **Project status**: this repository is in the **specification and planning stage**. The product and technical design for Phase 1 (see [Roadmap](#roadmap) below) are fully written up under [`specs/`](specs/), but no application code has been written yet. This README documents the project as it is *designed to work* once implemented — see [Project Status](#project-status) for exactly what exists today.
+> **Project status**: **Phase 1 is fully implemented** — accounts, invitations, projects, the Kanban board, and Work Items are all working end-to-end against a real Postgres (Neon) database. See [Project Status](#project-status) for the exact task count and what's next.
 
 ## Why this project exists
 
@@ -47,17 +47,13 @@ This is the same model used by comparable self-hosted tools (Kan.bn, Kaneo, Plan
 
 ## Getting started (self-hosting)
 
-*(These are the target setup steps once Phase 1 is implemented — see [Project Status](#project-status).)*
-
 ### Prerequisites
 
-You'll need free accounts with three external services (all of them have a free tier that comfortably covers a personal or small-team instance):
+You'll need free accounts with two external services (both have a free tier that comfortably covers a personal or small-team instance), plus Node.js 20+ installed locally:
 
-1. **[Neon](https://neon.tech)** — create a project, copy its Postgres connection string.
-2. **[Resend](https://resend.com)** — create an API key (used to send verification and password-reset emails).
-3. **[Google Cloud Console](https://console.cloud.google.com)** — create an OAuth 2.0 Client ID (type "Web application") for "Sign in with Google". Add `<your-domain>/api/auth/callback/google` as an authorized redirect URI.
-
-You'll also need Node.js 20+ installed locally.
+1. **[Neon](https://neon.tech)** — create a project, copy its Postgres connection string. Required — the app won't start without `DATABASE_URL`.
+2. **[Resend](https://resend.com)** — create an API key. Required — used to send verification and password-reset emails; the app won't start without `RESEND_API_KEY` either.
+3. *(Optional)* **[Google Cloud Console](https://console.cloud.google.com)** — create an OAuth 2.0 Client ID (type "Web application") for "Sign in with Google". Add `<your-domain>/api/auth/callback/google` as an authorized redirect URI. Skip this and leave `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` blank if you only need email/password sign-up — the "Continue with Google" button just won't work until you fill them in.
 
 ### Environment variables
 
@@ -67,8 +63,11 @@ Copy `.env.example` to `.env.local` and fill in:
 |---|---|
 | `DATABASE_URL` | Your Neon Postgres connection string |
 | `RESEND_API_KEY` | API key from Resend |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | From your Google Cloud OAuth client |
 | `BETTER_AUTH_SECRET` | A random secret used to sign sessions (`openssl rand -base64 32`) |
+| `BETTER_AUTH_URL` | Base URL the app is reachable at — `http://localhost:3000` for local dev |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | *(Optional)* From your Google Cloud OAuth client |
+
+Resend's sandbox only delivers to the email address on your own Resend account — signing up with any other address won't get a real verification email until you verify a sending domain in Resend.
 
 ### Run it locally
 
@@ -80,7 +79,18 @@ npm run db:migrate   # applies both the app schema and Better Auth's own tables
 npm run dev
 ```
 
+`db:generate`, `db:migrate`, and `auth:generate` all load `.env.local` automatically (via `dotenv-cli`) — no need to `export` anything yourself.
+
 The app will be available at `http://localhost:3000`.
+
+### Testing
+
+```bash
+npm run test       # unit tests (Vitest) — safe to run anytime, no DB access
+npm run test:e2e   # end-to-end tests (Playwright)
+```
+
+**Before running `test:e2e`, point `DATABASE_URL` at a disposable Neon branch, never your real data** — `tests/e2e/setup.ts` truncates every app and auth table before the suite runs. Neon branches are free and made for exactly this; create one from your Neon project dashboard and use its connection string only for test runs.
 
 ### Deploying
 
@@ -97,14 +107,13 @@ See [`specs/001-accounts-invitations/plan.md`](specs/001-accounts-invitations/pl
 This project follows **Spec-Driven Development**: every feature is specified, clarified, planned, and broken into tasks *before* any code is written — see [`AGENTS.md`](AGENTS.md) for how that workflow is organized in this repo.
 
 - ✅ **Project constitution** ratified ([`.specify/memory/constitution.md`](.specify/memory/constitution.md))
-- ✅ **Phase 1 (MVP core)** fully specified, clarified, planned, and broken into tasks — see [`specs/`](specs/)
-- ⬜ **Phase 1 implementation** — not started (0 lines of application code yet)
-- ⬜ **Phase 2** (Work Item relationships, roles & permissions, detail view) — not specified yet
-- ⬜ **Phase 3** (list/table/calendar views, extended fields) — not specified yet
+- ✅ **Phase 1 (MVP core)** fully specified, planned, and **implemented** — 121/121 tasks done across [`specs/001-accounts-invitations`](specs/001-accounts-invitations/), including P1 (MVP), P2/P3 (invitations, project/board/Work Item management), and Polish (loading states, error boundary, accessibility, unit tests)
+- ⬜ **Phase 2** (Work Item relationships — parent/child and "related to" — plus roles & permissions, detail view depth) — not specified yet
+- ⬜ **Phase 3** (list/table/calendar views, extended fields) — not specified yet, not yet confirmed in scope
 
 ## Roadmap
 
-**Phase 1 — Core (MVP)**
+**Phase 1 — Core** ✅ *done*
 1. Accounts & Invitations
 2. Projects & Spaces (Personal/Shared)
 3. Kanban Board (columns/stages)

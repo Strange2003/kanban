@@ -7,6 +7,7 @@ import {
   jsonb,
   primaryKey,
   uniqueIndex,
+  index,
   pgEnum,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
@@ -56,7 +57,12 @@ export const projectMembers = pgTable(
     role: projectRoleEnum("role").notNull(),
     joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [primaryKey({ columns: [table.projectId, table.userId] })],
+  (table) => [
+    primaryKey({ columns: [table.projectId, table.userId] }),
+    // The PK above only helps lookups keyed by projectId first — listMyProjects
+    // filters by userId alone, which needs its own index at scale (SC-005 of 001).
+    index("project_members_user_id_idx").on(table.userId),
+  ],
 );
 
 // --- Invitación (data-model.md § Invitación, FR-012 de 001) ---
@@ -83,44 +89,61 @@ export const invitations = pgTable(
 );
 
 // --- Notificación (data-model.md § Notificación) ---
-export const notifications = pgTable("notifications", {
-  id: serial("id").primaryKey(),
-  userId: text("user_id").notNull(),
-  type: notificationTypeEnum("type").notNull(),
-  payload: jsonb("payload").notNull(),
-  readAt: timestamp("read_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    type: notificationTypeEnum("type").notNull(),
+    payload: jsonb("payload").notNull(),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("notifications_user_id_idx").on(table.userId)],
+);
 
 // --- Stage/Columna (data-model.md § Stage/Columna) ---
-export const stages = pgTable("stages", {
-  id: serial("id").primaryKey(),
-  publicId: text("public_id").notNull().unique(),
-  projectId: integer("project_id")
-    .notNull()
-    .references(() => projects.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
-  position: integer("position").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const stages = pgTable(
+  "stages",
+  {
+    id: serial("id").primaryKey(),
+    publicId: text("public_id").notNull().unique(),
+    projectId: integer("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    position: integer("position").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("stages_project_id_idx").on(table.projectId)],
+);
 
 // --- Work Item (data-model.md § Work Item) ---
-export const workItems = pgTable("work_items", {
-  id: serial("id").primaryKey(),
-  projectId: integer("project_id")
-    .notNull()
-    .references(() => projects.id, { onDelete: "cascade" }),
-  displayNumber: integer("display_number").notNull(),
-  stageId: integer("stage_id")
-    .notNull()
-    .references(() => stages.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  description: text("description"),
-  stakeholder: text("stakeholder"),
-  position: integer("position").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const workItems = pgTable(
+  "work_items",
+  {
+    id: serial("id").primaryKey(),
+    projectId: integer("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    displayNumber: integer("display_number").notNull(),
+    stageId: integer("stage_id")
+      .notNull()
+      .references(() => stages.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    stakeholder: text("stakeholder"),
+    position: integer("position").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // getBoard (SC-005 of 001) filters/joins on both — a project with many
+    // stages and Work Items would otherwise force a sequential scan.
+    index("work_items_project_id_idx").on(table.projectId),
+    index("work_items_stage_id_idx").on(table.stageId),
+  ],
+);
 
 // --- Tag (data-model.md § Tag, catálogo por proyecto) ---
 export const tags = pgTable(
@@ -148,16 +171,23 @@ export const workItemTags = pgTable(
       .notNull()
       .references(() => tags.id, { onDelete: "cascade" }),
   },
-  (table) => [primaryKey({ columns: [table.workItemId, table.tagId] })],
+  (table) => [
+    primaryKey({ columns: [table.workItemId, table.tagId] }),
+    index("work_item_tags_tag_id_idx").on(table.tagId),
+  ],
 );
 
 // --- Log de Actividad de Work Item (constitution § Estándares de Producto y Datos › Auditoría) ---
-export const workItemActivity = pgTable("work_item_activity", {
-  id: serial("id").primaryKey(),
-  workItemId: integer("work_item_id")
-    .notNull()
-    .references(() => workItems.id, { onDelete: "cascade" }),
-  type: text("type").notNull(),
-  payload: jsonb("payload").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const workItemActivity = pgTable(
+  "work_item_activity",
+  {
+    id: serial("id").primaryKey(),
+    workItemId: integer("work_item_id")
+      .notNull()
+      .references(() => workItems.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    payload: jsonb("payload").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("work_item_activity_work_item_id_idx").on(table.workItemId)],
+);

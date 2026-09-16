@@ -466,14 +466,14 @@ misma columna y verificar que el orden persiste.
 **Purpose**: Endurecer lo construido en las 22 historias anteriores antes
 de considerar la Fase 1 lista para uso real.
 
-- [ ] T114 [P] Correr manualmente el flujo completo de `quickstart.md` de punta a punta y registrar los resultados
-- [ ] T115 [P] Test de escala: sembrar un proyecto con ≥100 miembros, ≥50 proyectos por cuenta, ≥20 columnas y ≥100 Work Items por columna, y verificar ausencia de degradación perceptible (SC-005 de 001, SC-004 de 002/003/004)
-- [ ] T116 [P] Agregar skeletons de carga para el tablero y la barra lateral (Principio I — sin bloqueos de carga perceptibles)
-- [ ] T117 [P] Agregar error boundary global + sistema de toasts para errores de Server Actions en `app/(workspace)/error.tsx`
-- [ ] T118 [P] Pasada de accesibilidad: estados de foco por teclado y `aria-label` en los controles de drag-and-drop
-- [ ] T119 [P] Escribir tests unitarios de `lib/permissions.ts` y `lib/ids.ts` (colisión de prefijos, numeración correlativa) en `tests/unit/`
-- [ ] T120 Revisar y ajustar el umbral de rate limit de invitaciones (FR-017, hoy 20/hora) según la Acción Manual #8 de `plan.md`
-- [ ] T121 [P] Actualizar `README.md` con los pasos de setup finales, validados contra `quickstart.md`
+- [X] T114 [P] Correr manualmente el flujo completo de `quickstart.md` de punta a punta y registrar los resultados
+- [X] T115 [P] Test de escala: sembrar un proyecto con ≥100 miembros, ≥50 proyectos por cuenta, ≥20 columnas y ≥100 Work Items por columna, y verificar ausencia de degradación perceptible (SC-005 de 001, SC-004 de 002/003/004)
+- [X] T116 [P] Agregar skeletons de carga para el tablero y la barra lateral (Principio I — sin bloqueos de carga perceptibles)
+- [X] T117 [P] Agregar error boundary global + sistema de toasts para errores de Server Actions en `app/(workspace)/error.tsx`
+- [X] T118 [P] Pasada de accesibilidad: estados de foco por teclado y `aria-label` en los controles de drag-and-drop
+- [X] T119 [P] Escribir tests unitarios de `lib/permissions.ts` y `lib/ids.ts` (colisión de prefijos, numeración correlativa) en `tests/unit/`
+- [X] T120 Revisar y ajustar el umbral de rate limit de invitaciones (FR-017, hoy 20/hora) según la Acción Manual #8 de `plan.md`
+- [X] T121 [P] Actualizar `README.md` con los pasos de setup finales, validados contra `quickstart.md`
 
 ---
 
