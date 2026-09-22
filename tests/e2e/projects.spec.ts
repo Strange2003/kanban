@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { signUpNewUser, createProjectViaUi } from "./helpers";
+import { signUpNewUser, createProjectViaUi, clickUntilVisible } from "./helpers";
 
 // quickstart.md bloque 2.
 
@@ -51,7 +51,8 @@ test.describe("Projects", () => {
     const projectUrl = await createProjectViaUi(page, "Old Name");
 
     await page.goto(`${projectUrl}/settings`);
-    await page.getByLabel("Name").fill("New Name");
+    // Scoped to the page: the (closed) "New project" dialog in the sidebar has a "Name" field too.
+    await page.getByRole("main").getByLabel("Name").fill("New Name");
     await page.getByRole("button", { name: "Save" }).first().click();
     await expect(page.getByRole("heading", { name: "New Name — Settings" })).toBeVisible();
 
@@ -65,7 +66,10 @@ test.describe("Projects", () => {
     const projectUrl = await createProjectViaUi(page, "Disposable Project");
 
     await page.goto(`${projectUrl}/settings`);
-    await page.getByRole("button", { name: "Delete project" }).click();
+    await clickUntilVisible(
+      page.getByRole("button", { name: "Delete project" }),
+      page.getByRole("button", { name: "Confirm delete" }),
+    );
     await page.getByRole("button", { name: "Confirm delete" }).click();
 
     await expect(page).toHaveURL("/");
@@ -100,7 +104,7 @@ test.describe("Projects", () => {
     const memberEmail = await signUpNewUser(memberPage, "Member");
 
     await ownerPage.goto(`${projectUrl}/settings`);
-    await ownerPage.getByRole("button", { name: "Invite" }).click();
+    await ownerPage.getByRole("button", { name: "Invite", exact: true }).click();
     await ownerPage.getByLabel("Email").fill(memberEmail);
     await ownerPage.getByRole("button", { name: "Send invitation" }).click();
     await expect(ownerPage.getByText("Invitation sent.")).toBeVisible();
@@ -109,6 +113,9 @@ test.describe("Projects", () => {
     await memberPage.goto("/");
     await memberPage.getByRole("button", { name: "Notifications" }).click();
     await memberPage.getByRole("button", { name: "Accept" }).click();
+    // Resolved once the refreshed panel is empty — the button itself turns into "..." as
+    // soon as it's clicked, so its disappearing doesn't mean the Server Action finished.
+    await expect(memberPage.getByText("You're all caught up.")).toBeVisible();
     await memberPage.reload();
     await expect(memberPage.getByRole("link", { name: "Team Project" })).toBeVisible();
 
@@ -140,7 +147,7 @@ test.describe("Projects", () => {
     const memberEmail = await signUpNewUser(memberPage, "Member");
 
     await ownerPage.goto(`${projectUrl}/settings`);
-    await ownerPage.getByRole("button", { name: "Invite" }).click();
+    await ownerPage.getByRole("button", { name: "Invite", exact: true }).click();
     await ownerPage.getByLabel("Email").fill(memberEmail);
     await ownerPage.getByRole("button", { name: "Send invitation" }).click();
     await expect(ownerPage.getByText("Invitation sent.")).toBeVisible();
@@ -149,6 +156,9 @@ test.describe("Projects", () => {
     await memberPage.goto("/");
     await memberPage.getByRole("button", { name: "Notifications" }).click();
     await memberPage.getByRole("button", { name: "Accept" }).click();
+    // Resolved once the refreshed panel is empty — the button itself turns into "..." as
+    // soon as it's clicked, so its disappearing doesn't mean the Server Action finished.
+    await expect(memberPage.getByText("You're all caught up.")).toBeVisible();
     await memberPage.reload();
     await expect(memberPage.getByRole("link", { name: "Leavable Project" })).toBeVisible();
 
@@ -158,7 +168,10 @@ test.describe("Projects", () => {
 
     // The member leaves voluntarily (FR-013).
     await memberPage.goto(`${projectUrl}/settings`);
-    await memberPage.getByRole("button", { name: "Leave project" }).click();
+    await clickUntilVisible(
+      memberPage.getByRole("button", { name: "Leave project" }),
+      memberPage.getByRole("button", { name: "Confirm" }),
+    );
     await memberPage.getByRole("button", { name: "Confirm" }).click();
     await expect(memberPage).toHaveURL("/");
     await expect(memberPage.getByRole("link", { name: "Leavable Project" })).toBeHidden();

@@ -1,5 +1,14 @@
 import { test, expect, type Page } from "@playwright/test";
-import { signUpNewUser, createProjectViaUi, selectRelationOption, openCard, backToBoard, clickUntilVisible } from "./helpers";
+import {
+  signUpNewUser,
+  createProjectViaUi,
+  selectRelationOption,
+  openCard,
+  backToBoard,
+  clickUntilVisible,
+  addColumn,
+  addWorkItem,
+} from "./helpers";
 
 // As of 006-work-item-detail-view, opening a Work Item navigates to its own
 // dedicated page instead of a modal — these tests interact with `page`
@@ -12,20 +21,6 @@ import { signUpNewUser, createProjectViaUi, selectRelationOption, openCard, back
 // resolves anyway — the fix for a slow round trip is patience, not a retry
 // that could double-submit a non-idempotent request.
 const LONG_TIMEOUT = 15000;
-
-async function addColumn(page: Page, name: string) {
-  await page.getByRole("button", { name: "+ Add column" }).click();
-  await page.getByPlaceholder("Column name").fill(name);
-  await page.getByRole("button", { name: "Add" }).click();
-  await expect(page.getByRole("heading", { name, level: 3 })).toBeVisible();
-}
-
-async function addWorkItem(page: Page, title: string) {
-  await page.getByRole("button", { name: "+ Add work item" }).first().click();
-  await page.getByPlaceholder("Title").fill(title);
-  await page.getByRole("button", { name: "Add", exact: true }).click();
-  await expect(page.locator('[data-testid="work-item-card"]', { hasText: title })).toBeVisible();
-}
 
 test.describe("Work Item Relationships", () => {
   // quickstart.md bloque 1.

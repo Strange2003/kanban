@@ -6,16 +6,12 @@ import {
   dragWorkItemOntoWorkItem,
   openCard,
   backToBoard,
+  addColumn,
+  addWorkItem,
+  clickUntilVisible,
 } from "./helpers";
 
 // quickstart.md bloque 4.
-
-async function addColumn(page: import("@playwright/test").Page, name: string) {
-  await page.getByRole("button", { name: "+ Add column" }).click();
-  await page.getByPlaceholder("Column name").fill(name);
-  await page.getByRole("button", { name: "Add" }).click();
-  await expect(page.getByRole("heading", { name, level: 3 })).toBeVisible();
-}
 
 test.describe("Work Items", () => {
   test("rejects an empty title, then creates a Work Item with a readable id", async ({ page }) => {
@@ -23,7 +19,7 @@ test.describe("Work Items", () => {
     await createProjectViaUi(page, "Tablero Demo");
     await addColumn(page, "To do");
 
-    await page.getByRole("button", { name: "+ Add work item" }).click();
+    await clickUntilVisible(page.getByRole("button", { name: "+ Add work item" }), page.getByPlaceholder("Title"));
     await page.getByRole("button", { name: "Add", exact: true }).click();
     await expect(page.getByText(/title is required/i)).toBeVisible();
 
@@ -31,8 +27,9 @@ test.describe("Work Items", () => {
     await page.getByRole("button", { name: "Add", exact: true }).click();
 
     await expect(page.locator('[data-testid="work-item-card"]', { hasText: "Design the login screen" })).toBeVisible();
-    // FR-003 of 004-work-items: correlative per-project id, e.g. "TAB-1".
-    await expect(page.getByText(/^[A-Z0-9]{1,4}-1$/)).toBeVisible();
+    // FR-003 of 004-work-items: correlative per-project id, e.g. "TAB-1". The prefix
+    // gets a numeric suffix on collision ("TAB2", "TAB15"...), so its length varies.
+    await expect(page.getByText(/^[A-Z0-9]+-1$/)).toBeVisible();
   });
 
   test("dragging a Work Item to another column moves it, and it persists on reload", async ({ page }) => {
@@ -41,10 +38,7 @@ test.describe("Work Items", () => {
     await addColumn(page, "To do");
     await addColumn(page, "Doing");
 
-    await page.getByRole("button", { name: "+ Add work item" }).first().click();
-    await page.getByPlaceholder("Title").fill("Design the login screen");
-    await page.getByRole("button", { name: "Add", exact: true }).click();
-    await expect(page.locator('[data-testid="work-item-card"]', { hasText: "Design the login screen" })).toBeVisible();
+    await addWorkItem(page, "Design the login screen");
 
     await dragWorkItemToColumn(page, "Design the login screen", "Doing");
 
@@ -63,9 +57,7 @@ test.describe("Work Items", () => {
     await createProjectViaUi(page, "Tablero Demo");
     await addColumn(page, "To do");
 
-    await page.getByRole("button", { name: "+ Add work item" }).click();
-    await page.getByPlaceholder("Title").fill("Design the login screen");
-    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await addWorkItem(page, "Design the login screen");
     await openCard(page, "Design the login screen");
 
     await page.getByLabel("Description", { exact: true }).fill("Match the new brand colors.");
@@ -78,9 +70,7 @@ test.describe("Work Items", () => {
 
     // Tag is now in the project's catalog — back to the board, add it to a second item too.
     await backToBoard(page);
-    await page.getByRole("button", { name: "+ Add work item" }).click();
-    await page.getByPlaceholder("Title").fill("Another item");
-    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await addWorkItem(page, "Another item");
     await openCard(page, "Another item");
     await page.getByPlaceholder("Add a tag...").fill("design");
     await page.getByRole("button", { name: "design", exact: true }).click();
@@ -93,8 +83,10 @@ test.describe("Work Items", () => {
     await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Match the new brand colors.", {
       timeout: 15000,
     });
-    await expect(page.getByText(/edited description/i)).toBeVisible();
-    await expect(page.getByText(/edited tags/i)).toBeVisible();
+    // One save logs one "fields_edited" entry listing every changed field, e.g.
+    // "Edited tags, description, stakeholder".
+    await expect(page.getByText(/^Edited .*\bdescription\b/)).toBeVisible();
+    await expect(page.getByText(/^Edited .*\btags\b/)).toBeVisible();
   });
 
   // quickstart.md bloque 4, paso 5 (T100).
@@ -103,9 +95,7 @@ test.describe("Work Items", () => {
     await createProjectViaUi(page, "Tablero Demo");
     await addColumn(page, "To do");
 
-    await page.getByRole("button", { name: "+ Add work item" }).click();
-    await page.getByPlaceholder("Title").fill("Temporary item");
-    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await addWorkItem(page, "Temporary item");
 
     await openCard(page, "Temporary item");
     await page.getByRole("button", { name: "Delete", exact: true }).click();
@@ -122,10 +112,7 @@ test.describe("Work Items", () => {
     await addColumn(page, "To do");
 
     for (const title of ["First item", "Second item", "Third item"]) {
-      await page.getByRole("button", { name: "+ Add work item" }).click();
-      await page.getByPlaceholder("Title").fill(title);
-      await page.getByRole("button", { name: "Add", exact: true }).click();
-      await expect(page.locator('[data-testid="work-item-card"]', { hasText: title })).toBeVisible();
+      await addWorkItem(page, title);
     }
 
     const cards = page.locator('[data-testid="work-item-card"]');

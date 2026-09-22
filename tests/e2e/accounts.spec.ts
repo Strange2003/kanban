@@ -23,14 +23,21 @@ test.describe("Accounts", () => {
     await page.getByLabel("Password").fill(password);
     await page.getByRole("button", { name: "Create account" }).click();
 
-    await expect(page).toHaveURL("/");
+    // FR-015: no session until the email is verified — the user is told to check it.
+    await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
+    await expect(page.getByText(email)).toBeVisible();
 
-    // Sign out and back in with the same credentials (FR-003).
     await page.goto("/sign-in");
     await page.getByLabel("Email").fill(email);
     await page.getByLabel("Password").fill(password);
     await page.getByRole("button", { name: "Sign in" }).click();
+    await expect(page.getByText(/verif/i)).toBeVisible();
+    await expect(page).toHaveURL("/sign-in");
 
+    // There's no real inbox here: flip what following the emailed link would flip,
+    // then sign in with the same credentials (FR-003).
+    await db.update(user).set({ emailVerified: true }).where(eq(user.email, email));
+    await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page).toHaveURL("/");
   });
 
@@ -69,7 +76,9 @@ test.describe("Accounts", () => {
     await page.getByLabel("Email").fill(email);
     await page.getByLabel("Password").fill(password);
     await page.getByRole("button", { name: "Create account" }).click();
-    await expect(page.getByRole("button", { name: "Creating account..." })).toBeHidden();
+    await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
+    // Signing in needs a verified email (FR-015), independent of the reset flow under test.
+    await db.update(user).set({ emailVerified: true }).where(eq(user.email, email));
 
     const [dbUser] = await db.select().from(user).where(eq(user.email, email)).limit(1);
     if (!dbUser) throw new Error("Signed-up user not found.");

@@ -10,6 +10,9 @@ import {
   openCard,
   dragWorkItemToColumn,
   selectRelationOption,
+  addColumn,
+  addWorkItem,
+  clickUntilVisible,
 } from "./helpers";
 
 // quickstart.md of 007-roles-permissions, one describe block per user story.
@@ -34,17 +37,23 @@ test.describe("Roles — the owner changes a member's role (US1)", () => {
     await expect(ownerPage.getByText("Signed in as Owner.")).toBeVisible();
 
     // Member -> Viewer -> Member -> Viewer, each change reflected in the list.
+    // The select shows the new role straight away (optimistically) and stays disabled
+    // until the change is saved — wait for that before the next step reads the server.
     await roleSelect.selectOption("viewer");
     await expect(roleSelect).toHaveValue("viewer");
+    await expect(roleSelect).toBeEnabled();
     await roleSelect.selectOption("member");
     await expect(roleSelect).toHaveValue("member");
+    await expect(roleSelect).toBeEnabled();
     await roleSelect.selectOption("viewer");
+    await expect(roleSelect).toBeEnabled();
     await ownerPage.reload();
     await expect(ownerPage.getByLabel("Role of Beto")).toHaveValue("viewer");
 
     // Back to Member so the next check compares against a plain member.
     await ownerPage.getByLabel("Role of Beto").selectOption("member");
     await expect(ownerPage.getByLabel("Role of Beto")).toHaveValue("member");
+    await expect(ownerPage.getByLabel("Role of Beto")).toBeEnabled();
 
     // A member opens Settings: no role selector, but sees every role and their own.
     await memberPage.goto(`${projectUrl}/settings`);
@@ -62,26 +71,13 @@ test.describe("Roles — the owner changes a member's role (US1)", () => {
 // ---------------------------------------------------------------------------
 // US2 — a Viewer reads everything and can't change anything.
 
-async function addColumn(page: Page, name: string) {
-  await page.getByRole("button", { name: "+ Add column" }).click();
-  await page.getByPlaceholder("Column name").fill(name);
-  await page.getByRole("button", { name: "Add" }).click();
-  await expect(page.getByRole("heading", { name, level: 3 })).toBeVisible();
-}
-
-async function addWorkItem(page: Page, title: string) {
-  await page.getByRole("button", { name: "+ Add work item" }).first().click();
-  await page.getByPlaceholder("Title").fill(title);
-  await page.getByRole("button", { name: "Add", exact: true }).click();
-  await expect(page.locator('[data-testid="work-item-card"]', { hasText: title })).toBeVisible();
-}
-
 /** The owner sets a member's role from the settings page. */
 async function setRole(ownerPage: Page, projectUrl: string, memberName: string, role: "member" | "viewer") {
   await ownerPage.goto(`${projectUrl}/settings`);
   const select = ownerPage.getByLabel(`Role of ${memberName}`);
   await select.selectOption(role);
   await expect(select).toHaveValue(role);
+  await expect(select).toBeEnabled();
 }
 
 test.describe("Roles — a Viewer is read-only (US2)", () => {
@@ -111,25 +107,27 @@ test.describe("Roles — a Viewer is read-only (US2)", () => {
     // --- Board: nothing to edit, and a visible explanation.
     await viewerPage.goto(projectUrl);
     await expect(viewerPage.locator('[data-testid="work-item-card"]', { hasText: "Alpha task" })).toBeVisible();
-    await expect(viewerPage.getByRole("status")).toContainText(/read-only/i);
+    // Filtered: dnd-kit adds its own (empty) role="status" live region to the board.
+    await expect(viewerPage.getByRole("status").filter({ hasText: /read-only/i })).toBeVisible();
     await expect(viewerPage.getByRole("button", { name: "+ Add column" })).toBeHidden();
     await expect(viewerPage.getByRole("button", { name: "+ Add work item" })).toHaveCount(0);
     await expect(viewerPage.getByRole("button", { name: "Delete column" })).toHaveCount(0);
 
     // Dragging a card does nothing, and it's still where it was after a reload.
-    await dragWorkItemToColumn(viewerPage, "Alpha task", "Doing");
+    await dragWorkItemToColumn(viewerPage, "Alpha task", "Doing", { waitForSave: false });
     await viewerPage.reload();
     const todoColumn = viewerPage.locator('[data-testid="stage-column"]', { hasText: "To do" });
     await expect(todoColumn.getByText("Alpha task")).toBeVisible();
 
     // Double-clicking a column name doesn't open the rename editor.
     await viewerPage.getByRole("heading", { name: "To do", level: 3 }).dblclick();
-    await expect(viewerPage.getByRole("textbox")).toHaveCount(0);
+    await expect(viewerPage.locator('[data-testid="stage-column"]').getByRole("textbox")).toHaveCount(0);
 
     // --- Detail view: read-only fields, but the relation is still a real link.
     await openCard(viewerPage, "Alpha task");
     await expect(viewerPage.getByLabel("Title")).toHaveAttribute("readonly", "");
-    await expect(viewerPage.getByLabel("Description")).toHaveAttribute("readonly", "");
+    // `exact`: the sidebar's (closed) "New project" dialog has a "Description (optional)".
+    await expect(viewerPage.getByLabel("Description", { exact: true })).toHaveAttribute("readonly", "");
     await expect(viewerPage.getByRole("button", { name: "Save" })).toHaveCount(0);
     await expect(viewerPage.getByRole("button", { name: "Delete", exact: true })).toHaveCount(0);
     await expect(viewerPage.getByLabel("Relate to")).toHaveCount(0);
@@ -143,10 +141,13 @@ test.describe("Roles — a Viewer is read-only (US2)", () => {
     // --- Settings: no owner controls, no invitations (FR-018), but they can leave.
     await viewerPage.goto(`${projectUrl}/settings`);
     await expect(viewerPage.getByText("Signed in as Viewer.")).toBeVisible();
-    await expect(viewerPage.getByRole("button", { name: "Invite" })).toHaveCount(0);
+    await expect(viewerPage.getByRole("button", { name: "Invite", exact: true })).toHaveCount(0);
     await expect(viewerPage.getByText("Pending invitations")).toHaveCount(0);
     await expect(viewerPage.getByRole("button", { name: "Delete project" })).toHaveCount(0);
-    await viewerPage.getByRole("button", { name: "Leave project" }).click();
+    await clickUntilVisible(
+      viewerPage.getByRole("button", { name: "Leave project" }),
+      viewerPage.getByRole("button", { name: "Confirm" }),
+    );
     await viewerPage.getByRole("button", { name: "Confirm" }).click();
     await viewerPage.waitForURL("/");
     await expect(viewerPage.getByRole("link", { name: "Read Only Project" })).toBeHidden();
@@ -211,7 +212,7 @@ test.describe("Roles — inviting with a role (US3)", () => {
 
     // The role selector never offers Owner.
     await ownerPage.goto(`${projectUrl}/settings`);
-    await ownerPage.getByRole("button", { name: "Invite" }).click();
+    await ownerPage.getByRole("button", { name: "Invite", exact: true }).click();
     await expect(ownerPage.getByLabel("Role", { exact: true }).locator("option")).toHaveText(["Member", "Viewer"]);
     await ownerPage.getByRole("button", { name: "Close" }).click();
 
@@ -221,7 +222,7 @@ test.describe("Roles — inviting with a role (US3)", () => {
     // FR-016: an Owner + a Viewer is a Shared project — the role doesn't matter for that.
     await expect(ownerPage.getByRole("button", { name: "Shared" })).toBeVisible();
     await inviteePage.goto(projectUrl);
-    await expect(inviteePage.getByRole("status")).toContainText(/read-only/i);
+    await expect(inviteePage.getByRole("status").filter({ hasText: /read-only/i })).toBeVisible();
 
     await ownerContext.close();
     await inviteeContext.close();
@@ -244,7 +245,7 @@ test.describe("Roles — inviting with a role (US3)", () => {
     // The owner has a pending invitation of their own for a third person.
     const ownersInviteeEmail = await signUpNewUser(inviteePage, "Eva");
     await ownerPage.goto(`${projectUrl}/settings`);
-    await ownerPage.getByRole("button", { name: "Invite" }).click();
+    await ownerPage.getByRole("button", { name: "Invite", exact: true }).click();
     await ownerPage.getByLabel("Email").fill(ownersInviteeEmail);
     await ownerPage.getByRole("button", { name: "Send invitation" }).click();
     await expect(ownerPage.getByText("Invitation sent.")).toBeVisible();
@@ -253,7 +254,7 @@ test.describe("Roles — inviting with a role (US3)", () => {
     // Beto (a Member) invites someone else, as Member.
     const betosInviteeEmail = `beto-invitee-${Date.now()}@example.com`;
     await memberPage.goto(`${projectUrl}/settings`);
-    await memberPage.getByRole("button", { name: "Invite" }).click();
+    await memberPage.getByRole("button", { name: "Invite", exact: true }).click();
     await memberPage.getByLabel("Email").fill(betosInviteeEmail);
     await memberPage.getByRole("button", { name: "Send invitation" }).click();
     await expect(memberPage.getByText("Invitation sent.")).toBeVisible();
@@ -307,6 +308,8 @@ test.describe("Roles — transferring ownership (US4)", () => {
     await anaPage.getByRole("button", { name: "Make Beto the owner" }).click();
     await expect(anaPage.getByText(/You will lose the owner-only permissions/)).toBeVisible();
     await anaPage.getByRole("button", { name: "Transfer ownership", exact: true }).click();
+    // The dialog closes and the page refreshes only once the transfer is saved.
+    await expect(anaPage.getByText("Signed in as Member.")).toBeVisible();
 
     // Ana is now a Member: no owner controls, and she can leave; Beto is the owner.
     await anaPage.reload();
@@ -320,7 +323,10 @@ test.describe("Roles — transferring ownership (US4)", () => {
     // Exactly one Owner in the list.
     await expect(betoPage.getByRole("listitem").filter({ hasText: /^\s*(Beto|Ana).*\bOwner\b/ })).toHaveCount(1);
 
-    await anaPage.getByRole("button", { name: "Leave project" }).click();
+    await clickUntilVisible(
+      anaPage.getByRole("button", { name: "Leave project" }),
+      anaPage.getByRole("button", { name: "Confirm" }),
+    );
     await anaPage.getByRole("button", { name: "Confirm" }).click();
     await anaPage.waitForURL("/");
 
@@ -342,6 +348,7 @@ test.describe("Roles — transferring ownership (US4)", () => {
 
     await anaPage.getByRole("button", { name: "Make Carla the owner" }).click();
     await anaPage.getByRole("button", { name: "Transfer ownership", exact: true }).click();
+    await expect(anaPage.getByText("Signed in as Member.")).toBeVisible();
 
     await carlaPage.goto(`${projectUrl}/settings`);
     await expect(carlaPage.getByText("Signed in as Owner.")).toBeVisible();

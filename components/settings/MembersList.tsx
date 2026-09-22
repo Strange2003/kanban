@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { changeMemberRole, removeMember, type ProjectMemberWithUser } from "@/lib/actions/projects";
 import { isRolePermissionError } from "@/lib/errors";
@@ -28,7 +28,16 @@ export function MembersList({
   const [inviteOpen, setInviteOpen] = useState(false);
   const [transferTarget, setTransferTarget] = useState<{ userId: string; name: string } | null>(null);
   const [removingUserId, setRemovingUserId] = useState<string | null>(null);
-  const [changingRoleUserId, setChangingRoleUserId] = useState<string | null>(null);
+  // The select is controlled by the server's value, so without an optimistic
+  // copy it would snap back to the old role until router.refresh() lands. The
+  // transition wraps the refresh too, so the optimistic role holds until the
+  // new props arrive (or is dropped if the action fails).
+  const [optimisticMembers, setOptimisticRole] = useOptimistic(
+    members,
+    (current, change: { userId: string; role: AssignableRole }) =>
+      current.map((m) => (m.userId === change.userId ? { ...m, role: change.role } : m)),
+  );
+  const [changingRole, startRoleChange] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   const canChangeRole = can(role, "member:changeRole");
@@ -49,19 +58,15 @@ export function MembersList({
     router.refresh();
   }
 
-  async function handleChangeRole(userId: string, nextRole: AssignableRole) {
+  function handleChangeRole(userId: string, nextRole: AssignableRole) {
     setError(null);
-    setChangingRoleUserId(userId);
-    const result = await changeMemberRole({ projectPublicId, userId, role: nextRole });
-    setChangingRoleUserId(null);
-
-    if (!result.ok) {
-      setError(result.error.message);
-      // NOT_A_MEMBER / ROLE_NOT_PERMITTED mean the list on screen is stale.
+    startRoleChange(async () => {
+      setOptimisticRole({ userId, role: nextRole });
+      const result = await changeMemberRole({ projectPublicId, userId, role: nextRole });
+      // On failure, NOT_A_MEMBER / ROLE_NOT_PERMITTED mean the list on screen is stale.
+      if (!result.ok) setError(result.error.message);
       router.refresh();
-      return;
-    }
-    router.refresh();
+    });
   }
 
   return (
@@ -78,7 +83,7 @@ export function MembersList({
       {error && <p className="text-destructive text-sm">{error}</p>}
 
       <ul className="divide-y divide-border rounded-md border border-border">
-        {members.map((member) => (
+        {optimisticMembers.map((member) => (
           <li key={member.userId} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
             <span>
               {member.name}
@@ -90,7 +95,7 @@ export function MembersList({
                   aria-label={`Role of ${member.name}`}
                   value={member.role}
                   onChange={(e) => handleChangeRole(member.userId, e.target.value as AssignableRole)}
-                  disabled={changingRoleUserId === member.userId}
+                  disabled={changingRole}
                   className="border-input bg-background h-8 rounded-md border px-2 text-xs focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {ASSIGNABLE_ROLES.map((assignable) => (

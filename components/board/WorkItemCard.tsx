@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -28,6 +29,18 @@ export function WorkItemCard({
   });
   const openDetail = () => router.push(`/projects/${projectPublicId}/work-items/${workItem.displayNumber}`);
 
+  // The card follows the pointer while dragged, so releasing it fires a click on
+  // the card itself — without this, every drag would also open the detail view.
+  // A pointer that travelled at least the sensor's activation distance
+  // (`distance: 8` in Board.tsx) was a drag, not a click.
+  const pointerDownAt = useRef<{ x: number; y: number } | null>(null);
+  const handleClick = (e: React.MouseEvent) => {
+    const start = pointerDownAt.current;
+    pointerDownAt.current = null;
+    if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) >= 8) return;
+    openDetail();
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -48,9 +61,13 @@ export function WorkItemCard({
           })}
       // FR-002 of 006-work-item-detail-view: navigates to the dedicated
       // detail view instead of opening a modal — the `distance: 8` pointer
-      // activation constraint on the sortable's sensor (Board.tsx) already
-      // keeps a plain click from being swallowed by a drag gesture.
-      onClick={openDetail}
+      // activation constraint on the sortable's sensor (Board.tsx) keeps a
+      // plain click from being swallowed by a drag gesture, and handleClick
+      // keeps a drag from turning into a click.
+      onPointerDownCapture={(e) => {
+        pointerDownAt.current = { x: e.clientX, y: e.clientY };
+      }}
+      onClick={handleClick}
       aria-label={`${workItem.displayId}: ${workItem.title}`}
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
       className={cn(

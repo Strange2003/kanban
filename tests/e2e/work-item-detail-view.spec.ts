@@ -6,21 +6,9 @@ import {
   clickUntilVisible,
   openCard,
   backToBoard,
+  addColumn,
+  addWorkItem,
 } from "./helpers";
-
-async function addColumn(page: Page, name: string) {
-  await page.getByRole("button", { name: "+ Add column" }).click();
-  await page.getByPlaceholder("Column name").fill(name);
-  await page.getByRole("button", { name: "Add" }).click();
-  await expect(page.getByRole("heading", { name, level: 3 })).toBeVisible();
-}
-
-async function addWorkItem(page: Page, title: string) {
-  await page.getByRole("button", { name: "+ Add work item" }).first().click();
-  await page.getByPlaceholder("Title").fill(title);
-  await page.getByRole("button", { name: "Add", exact: true }).click();
-  await expect(page.locator('[data-testid="work-item-card"]', { hasText: title })).toBeVisible();
-}
 
 test.describe("Work Item Detail View", () => {
   // quickstart.md bloque 1.

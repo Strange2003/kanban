@@ -54,7 +54,9 @@ export function AddStageButton({ projectPublicId }: { projectPublicId: string })
       />
       {error && <p className="text-destructive text-xs">{error}</p>}
       <div className="flex gap-2">
-        <Button type="submit" size="sm" disabled={submitting}>
+        {/* Keeps focus in the input: otherwise its onBlur closes the empty form before
+            the submit fires, and the "name is required" error never shows. */}
+        <Button type="submit" size="sm" disabled={submitting} onMouseDown={(e) => e.preventDefault()}>
           {submitting ? "Adding..." : "Add"}
         </Button>
         <Button type="button" size="sm" variant="ghost" onClick={() => setAdding(false)}>

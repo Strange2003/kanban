@@ -68,6 +68,28 @@ export async function clickUntilVisible(trigger: Locator, target: Locator, attem
 }
 
 /**
+ * Adds a board column. Opening the form goes through `clickUntilVisible` (the
+ * "+ Add column" button is often clicked right after a client-side navigation,
+ * before hydration), and the submit button is matched exactly — a loose
+ * `{ name: "Add" }` also matches every column's "+ Add work item".
+ */
+export async function addColumn(page: Page, name: string) {
+  await clickUntilVisible(page.getByRole("button", { name: "+ Add column" }), page.getByPlaceholder("Column name"));
+  await page.getByPlaceholder("Column name").fill(name);
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByRole("heading", { name, level: 3 })).toBeVisible();
+}
+
+/** Adds a Work Item to the first column, with the same hydration retry as `addColumn`. */
+export async function addWorkItem(page: Page, title: string) {
+  const addButton = page.getByRole("button", { name: "+ Add work item" }).first();
+  await clickUntilVisible(addButton, page.getByPlaceholder("Title"));
+  await page.getByPlaceholder("Title").fill(title);
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.locator('[data-testid="work-item-card"]', { hasText: title })).toBeVisible();
+}
+
+/**
  * Opens a Work Item card's dedicated detail view (006-work-item-detail-view)
  * by title, retrying the click if the URL doesn't change — a plain click()
  * can land microseconds before React finishes attaching the card's
@@ -104,11 +126,49 @@ export async function backToBoard(page: Page) {
 }
 
 /**
+ * The pointer sequence dnd-kit needs to register a drag and its drop target: a short
+ * move past the sensor's `distance: 8` activation constraint, a pause so it starts the
+ * drag and measures the droppables, a stepped move to the target, and a pause so
+ * collision detection settles on it before the release. Jumping straight to the
+ * target in one burst drops the pointer before dnd-kit knows what's under it.
+ *
+ * The board updates optimistically, so the moved card shows up before the Server
+ * Action that saves it has returned. By default this waits for that response too —
+ * a `page.reload()` right after would otherwise abort the save. Pass
+ * `waitForSave: false` for a drag that shouldn't reach the server (a Viewer's).
+ */
+export async function pointerDrag(
+  page: Page,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  { waitForSave = true }: { waitForSave?: boolean } = {},
+) {
+  const saved = waitForSave
+    ? page.waitForResponse(
+        (response) => response.request().method() === "POST" && !!response.request().headers()["next-action"],
+      )
+    : null;
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 12, from.y + 12, { steps: 3 });
+  await page.waitForTimeout(200);
+  await page.mouse.move(to.x, to.y, { steps: 20 });
+  await page.waitForTimeout(200);
+  await page.mouse.up();
+  await saved;
+}
+
+/**
  * dnd-kit listens for pointer events, not native HTML5 drag events, so
  * Playwright's `locator.dragTo()` (which dispatches dragstart/drop) doesn't
  * trigger it — simulate the pointer sequence by hand instead.
  */
-export async function dragWorkItemToColumn(page: Page, workItemTitle: string, columnName: string) {
+export async function dragWorkItemToColumn(
+  page: Page,
+  workItemTitle: string,
+  columnName: string,
+  options?: { waitForSave?: boolean },
+) {
   const card = page.locator('[data-testid="work-item-card"]', { hasText: workItemTitle });
   const column = page.locator('[data-testid="stage-column"]', { hasText: columnName });
 
@@ -116,10 +176,11 @@ export async function dragWorkItemToColumn(page: Page, workItemTitle: string, co
   const to = await column.boundingBox();
   if (!from || !to) throw new Error("Could not locate drag source/target.");
 
-  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 10 });
-  await page.mouse.up();
+  const center = (box: { x: number; y: number; width: number; height: number }) => ({
+    x: box.x + box.width / 2,
+    y: box.y + box.height / 2,
+  });
+  await pointerDrag(page, center(from), center(to), options);
 }
 
 /**
@@ -146,10 +207,11 @@ export async function dragWorkItemOntoWorkItem(page: Page, sourceTitle: string, 
   const to = await target.boundingBox();
   if (!from || !to) throw new Error("Could not locate drag source/target.");
 
-  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 10 });
-  await page.mouse.up();
+  await pointerDrag(
+    page,
+    { x: from.x + from.width / 2, y: from.y + from.height / 2 },
+    { x: to.x + to.width / 2, y: to.y + to.height / 2 },
+  );
 }
 
 /**
@@ -168,7 +230,7 @@ export async function inviteAndAccept(
   role: "member" | "viewer" = "member",
 ) {
   await ownerPage.goto(`${projectUrl}/settings`);
-  await ownerPage.getByRole("button", { name: "Invite" }).click();
+  await ownerPage.getByRole("button", { name: "Invite", exact: true }).click();
   await ownerPage.getByLabel("Email").fill(inviteeEmail);
   // `exact`: the settings page behind the dialog also has "Role of <name>" selectors.
   await ownerPage.getByLabel("Role", { exact: true }).selectOption(role);
@@ -179,7 +241,9 @@ export async function inviteAndAccept(
   await inviteePage.goto("/");
   await inviteePage.getByRole("button", { name: "Notifications" }).click();
   await inviteePage.getByRole("button", { name: "Accept" }).click();
-  await expect(inviteePage.getByRole("button", { name: "Accept" })).toBeHidden();
+  // Resolved once the refreshed panel is empty — the button itself turns into "..." as
+  // soon as it's clicked, so its disappearing doesn't mean the Server Action finished.
+  await expect(inviteePage.getByText("You're all caught up.")).toBeVisible();
 
   await ownerPage.reload();
 }

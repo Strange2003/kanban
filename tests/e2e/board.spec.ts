@@ -1,14 +1,7 @@
 import { test, expect } from "@playwright/test";
-import { signUpNewUser, createProjectViaUi } from "./helpers";
+import { signUpNewUser, createProjectViaUi, addColumn, clickUntilVisible, pointerDrag } from "./helpers";
 
 // quickstart.md bloque 3.
-
-async function addColumn(page: import("@playwright/test").Page, name: string) {
-  await page.getByRole("button", { name: "+ Add column" }).click();
-  await page.getByPlaceholder("Column name").fill(name);
-  await page.getByRole("button", { name: "Add" }).click();
-  await expect(page.getByRole("heading", { name, level: 3 })).toBeVisible();
-}
 
 /** Same pointer-sequence approach as dragWorkItemToColumn in helpers.ts — dnd-kit ignores native HTML5 drag events. */
 async function dragColumn(page: import("@playwright/test").Page, columnName: string, targetColumnName: string) {
@@ -19,10 +12,7 @@ async function dragColumn(page: import("@playwright/test").Page, columnName: str
   const to = await target.boundingBox();
   if (!from || !to) throw new Error("Could not locate drag source/target.");
 
-  await page.mouse.move(from.x + from.width / 2, from.y + 15);
-  await page.mouse.down();
-  await page.mouse.move(to.x + to.width / 2, to.y + 15, { steps: 10 });
-  await page.mouse.up();
+  await pointerDrag(page, { x: from.x + from.width / 2, y: from.y + 15 }, { x: to.x + to.width / 2, y: to.y + 15 });
 }
 
 test.describe("Kanban board", () => {
@@ -35,13 +25,13 @@ test.describe("Kanban board", () => {
     await expect(page.locator("h3")).toHaveCount(0);
 
     // Rejects an empty name.
-    await page.getByRole("button", { name: "+ Add column" }).click();
-    await page.getByRole("button", { name: "Add" }).click();
+    await clickUntilVisible(page.getByRole("button", { name: "+ Add column" }), page.getByPlaceholder("Column name"));
+    await page.getByRole("button", { name: "Add", exact: true }).click();
     await expect(page.getByText(/name is required/i)).toBeVisible();
 
     // Accepts a real name.
     await page.getByPlaceholder("Column name").fill("To do");
-    await page.getByRole("button", { name: "Add" }).click();
+    await page.getByRole("button", { name: "Add", exact: true }).click();
     await expect(page.getByRole("heading", { name: "To do", level: 3 })).toBeVisible();
   });
 
@@ -91,7 +81,8 @@ test.describe("Kanban board", () => {
     await addColumn(page, "Old column name");
 
     await page.getByRole("heading", { name: "Old column name", level: 3 }).dblclick();
-    const input = page.getByRole("textbox");
+    // Scoped to the column: the sidebar's project search is a textbox too.
+    const input = page.locator('[data-testid="stage-column"]').getByRole("textbox");
     await input.fill("New column name");
     await input.press("Enter");
 

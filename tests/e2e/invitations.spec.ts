@@ -18,7 +18,7 @@ test.describe("Invitations", () => {
 
     // Owner invites the not-yet-a-member invitee (FR-005/FR-006/FR-009).
     await ownerPage.goto(`${projectUrl}/settings`);
-    await ownerPage.getByRole("button", { name: "Invite" }).click();
+    await ownerPage.getByRole("button", { name: "Invite", exact: true }).click();
     await ownerPage.getByLabel("Email").fill(inviteeEmail);
     await ownerPage.getByRole("button", { name: "Send invitation" }).click();
     await expect(ownerPage.getByText("Invitation sent.")).toBeVisible();
@@ -34,7 +34,9 @@ test.describe("Invitations", () => {
     await inviteePage.getByRole("button", { name: "Notifications" }).click();
     await expect(inviteePage.getByText("Shared Project")).toBeVisible();
     await inviteePage.getByRole("button", { name: "Accept" }).click();
-    await expect(inviteePage.getByRole("button", { name: "Accept" })).toBeHidden();
+    // Resolved once the refreshed panel is empty — the button itself turns into "..." as
+    // soon as it's clicked, so its disappearing doesn't mean the Server Action finished.
+    await expect(inviteePage.getByText("You're all caught up.")).toBeVisible();
 
     // Project reclassifies to Shared for the invitee...
     await inviteePage.reload();
@@ -47,7 +49,7 @@ test.describe("Invitations", () => {
 
     // Re-inviting the now-a-member invitee is rejected (FR-013).
     await ownerPage.goto(`${projectUrl}/settings`);
-    await ownerPage.getByRole("button", { name: "Invite" }).click();
+    await ownerPage.getByRole("button", { name: "Invite", exact: true }).click();
     await ownerPage.getByLabel("Email").fill(inviteeEmail);
     await ownerPage.getByRole("button", { name: "Send invitation" }).click();
     await expect(ownerPage.getByText(/already a member/i)).toBeVisible();
@@ -68,7 +70,7 @@ test.describe("Invitations", () => {
     const inviteeEmail = await signUpNewUser(inviteePage, "Invitee");
 
     await ownerPage.goto(`${projectUrl}/settings`);
-    await ownerPage.getByRole("button", { name: "Invite" }).click();
+    await ownerPage.getByRole("button", { name: "Invite", exact: true }).click();
     await ownerPage.getByLabel("Email").fill(inviteeEmail);
     await ownerPage.getByRole("button", { name: "Send invitation" }).click();
     await expect(ownerPage.getByText("Invitation sent.")).toBeVisible();
@@ -78,14 +80,15 @@ test.describe("Invitations", () => {
     await inviteePage.goto("/");
     await inviteePage.getByRole("button", { name: "Notifications" }).click();
     await inviteePage.getByRole("button", { name: "Reject" }).click();
-    await expect(inviteePage.getByRole("button", { name: "Reject" })).toBeHidden();
+    // Resolved once the refreshed panel is empty, i.e. the Server Action finished.
+    await expect(inviteePage.getByText("You're all caught up.")).toBeVisible();
     await inviteePage.reload();
     await expect(inviteePage.getByRole("link", { name: "Reject Cancel Project" })).toBeHidden();
 
     // Owner sends a second invitation and cancels it before it's answered (FR-011).
     const secondInviteeEmail = await signUpNewUser(inviteePage, "Second Invitee");
     await ownerPage.goto(`${projectUrl}/settings`);
-    await ownerPage.getByRole("button", { name: "Invite" }).click();
+    await ownerPage.getByRole("button", { name: "Invite", exact: true }).click();
     await ownerPage.getByLabel("Email").fill(secondInviteeEmail);
     await ownerPage.getByRole("button", { name: "Send invitation" }).click();
     await expect(ownerPage.getByText("Invitation sent.")).toBeVisible();

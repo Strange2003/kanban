@@ -46,18 +46,18 @@ export function CreateProjectDialog({
       </DialogHeader>
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         <div className="space-y-1.5">
-          <Label htmlFor="project-name">Name</Label>
+          <Label htmlFor="new-project-name">Name</Label>
           <Input
-            id="project-name"
+            id="new-project-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoFocus
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="project-description">Description (optional)</Label>
+          <Label htmlFor="new-project-description">Description (optional)</Label>
           <Input
-            id="project-description"
+            id="new-project-description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />

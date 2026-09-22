@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { z } from "zod";
 import { authClient } from "@/lib/auth-client";
@@ -17,12 +16,14 @@ const signUpSchema = z.object({
 });
 
 export default function SignUpPage() {
-  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // FR-015 of 001-accounts-invitations: an email/password account can't sign in
+  // until its email is verified, so there's no session to send the user to yet.
+  const [verificationSentTo, setVerificationSentTo] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -47,7 +48,22 @@ export default function SignUpPage() {
       return;
     }
 
-    router.push("/");
+    setVerificationSentTo(parsed.data.email);
+  }
+
+  if (verificationSentTo) {
+    return (
+      <main className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-4 p-6">
+        <h1 className="text-2xl font-semibold">Check your email</h1>
+        <p className="text-muted-foreground text-sm">
+          We&apos;ve sent a verification link to <span className="text-foreground">{verificationSentTo}</span>.
+          Follow it to activate your account, then sign in.
+        </p>
+        <Link href="/sign-in" className="text-sm underline underline-offset-4">
+          Go to sign in
+        </Link>
+      </main>
+    );
   }
 
   return (
