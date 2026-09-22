@@ -93,6 +93,8 @@ npm run test:e2e   # end-to-end tests (Playwright)
 
 **Before running `test:e2e`, point `DATABASE_URL` at a disposable Neon branch, never your real data** — `tests/e2e/setup.ts` truncates every app and auth table before the suite runs. Neon branches are free and made for exactly this; create one from your Neon project dashboard and use its connection string only for test runs.
 
+The e2e suite runs against `next dev` (it reuses a dev server already on port 3000, or starts one) and takes roughly 15-20 minutes against a remote Neon branch; per-test timeouts in `playwright.config.ts` are sized for that.
+
 ### Deploying
 
 Any host that runs a persistent Node.js process works — the app is a standard Next.js app with no vendor-specific code. The team's default recommendation is **Render**:
@@ -109,7 +111,7 @@ This project follows **Spec-Driven Development**: every feature is specified, cl
 
 - ✅ **Project constitution** ratified ([`.specify/memory/constitution.md`](.specify/memory/constitution.md))
 - ✅ **Phase 1 (MVP core)** fully specified, planned, and **implemented** — 121/121 tasks done across [`specs/001-accounts-invitations`](specs/001-accounts-invitations/), including P1 (MVP), P2/P3 (invitations, project/board/Work Item management), and Polish (loading states, error boundary, accessibility, unit tests)
-- ✅ **Phase 2 (depth)** — Work Item relationships ([`specs/005-work-item-relationships`](specs/005-work-item-relationships/)), the Work Item detail view ([`specs/006-work-item-detail-view`](specs/006-work-item-detail-view/)) and roles & permissions ([`specs/007-roles-permissions`](specs/007-roles-permissions/)) **implemented**
+- ✅ **Phase 2 (depth)** — Work Item relationships ([`specs/005-work-item-relationships`](specs/005-work-item-relationships/)), the Work Item detail view ([`specs/006-work-item-detail-view`](specs/006-work-item-detail-view/)) and roles & permissions ([`specs/007-roles-permissions`](specs/007-roles-permissions/)) **implemented**, with the full unit and end-to-end suites green; the manual end-to-end pass of 007's `quickstart.md` (T057) is still open
 - ⬜ **Phase 3** (list/table/calendar views, extended fields) — not specified yet, not yet confirmed in scope
 
 ## Roadmap
