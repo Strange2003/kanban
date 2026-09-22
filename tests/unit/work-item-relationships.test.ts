@@ -8,7 +8,7 @@ const { mockExecute } = vi.hoisted(() => ({ mockExecute: vi.fn() }));
 vi.mock("@/db/client", () => ({ db: { execute: mockExecute } }));
 vi.mock("@/lib/auth", () => ({ getSession: vi.fn() }));
 
-import { workItemIsAncestorOf } from "@/lib/actions/work-item-relationships";
+import { workItemIsAncestorOf } from "@/lib/work-item-queries";
 
 describe("workItemIsAncestorOf", () => {
   beforeEach(() => {

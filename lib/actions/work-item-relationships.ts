@@ -7,12 +7,8 @@ import { workItems, workItemRelatedLinks, workItemActivity } from "@/db/schema";
 import { requireProjectMember, requireProjectPermission } from "@/lib/permissions";
 import { AppError, runAction, type Result } from "@/lib/errors";
 import type { ProjectRole } from "@/lib/roles";
-import {
-  getWorkItemAndProject,
-  listProjectTags,
-  getWorkItemTags,
-  listWorkItemActivity,
-} from "@/lib/actions/work-items";
+import { listProjectTags, getWorkItemTags, listWorkItemActivity } from "@/lib/actions/work-items";
+import { getWorkItemAndProject, workItemIsAncestorOf } from "@/lib/work-item-queries";
 
 // A Work Item reference as shown in a relations list — enough to render and
 // navigate to it without an extra query (FR-009/FR-010 of 005-work-item-relationships).
@@ -116,29 +112,6 @@ async function computeWorkItemRelations(
     children: childRows.map((row) => toRef(project, row)),
     related: relatedRows.map((row) => toRef(project, row)),
   };
-}
-
-/**
- * Does `candidateAncestorId` appear in `descendantId`'s chain of ancestors
- * (its parent, grandparent, ...)? Used to reject a `setWorkItemParent` call
- * that would create a cycle (FR-004 of 005-work-item-relationships) —
- * anidación arbitraria means the chain can be any number of levels deep, so
- * this walks the whole thing via a recursive CTE rather than checking only
- * the direct parent (research.md § Detección de ciclos).
- */
-export async function workItemIsAncestorOf(
-  candidateAncestorId: number,
-  descendantId: number,
-): Promise<boolean> {
-  const result = await db.execute<{ id: number }>(sql`
-    WITH RECURSIVE ancestors AS (
-      SELECT parent_work_item_id AS id FROM work_items WHERE id = ${descendantId}
-      UNION ALL
-      SELECT wi.parent_work_item_id AS id FROM work_items wi INNER JOIN ancestors a ON wi.id = a.id
-    )
-    SELECT id FROM ancestors WHERE id = ${candidateAncestorId}
-  `);
-  return result.rows.length > 0;
 }
 
 // FR-001/FR-002/FR-004/FR-007/FR-014 of 005-work-item-relationships

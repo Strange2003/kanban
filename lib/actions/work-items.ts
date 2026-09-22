@@ -7,6 +7,7 @@ import { db } from "@/db/client";
 import { workItems, stages, projects, workItemActivity, tags, workItemTags } from "@/db/schema";
 import { requireProjectMember, requireProjectPermission } from "@/lib/permissions";
 import { AppError, runAction, type Result } from "@/lib/errors";
+import { getWorkItemAndProject } from "@/lib/work-item-queries";
 
 export type WorkItemWithDisplayId = typeof workItems.$inferSelect & { displayId: string };
 
@@ -18,17 +19,6 @@ async function getStageAndProject(stagePublicId: string) {
   if (!project) throw new AppError("NOT_FOUND", "Project not found.");
 
   return { stage, project };
-}
-
-// Exported for lib/actions/work-item-relationships.ts (005-work-item-relationships).
-export async function getWorkItemAndProject(workItemId: number) {
-  const [workItem] = await db.select().from(workItems).where(eq(workItems.id, workItemId)).limit(1);
-  if (!workItem) throw new AppError("NOT_FOUND", "Work item not found.");
-
-  const [project] = await db.select().from(projects).where(eq(projects.id, workItem.projectId)).limit(1);
-  if (!project) throw new AppError("NOT_FOUND", "Project not found.");
-
-  return { workItem, project };
 }
 
 // Resolves the URL segment of the dedicated detail view (FR-001/FR-010/FR-011

@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Resend } from "resend";
 import { db } from "@/db/client";
-import { applyPendingInvitationsForUser } from "@/lib/actions/accounts-invitations";
+import { applyPendingInvitationsForUser } from "@/lib/invitations";
 
 if (!process.env.RESEND_API_KEY) {
   throw new Error("RESEND_API_KEY is not set. Copy .env.example to .env.local and fill it in.");

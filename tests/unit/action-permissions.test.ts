@@ -238,12 +238,6 @@ const MEMBERSHIP_ONLY_READS = [
   "respondToInvitation", // only the invited email may answer it (checked in the action)
 ];
 
-// PRE-EXISTING (Phases 1-2), NOT gated: helpers exported from "use server" files so that sibling
-// modules can import them, which also makes them public Server Actions. They take raw ids with no
-// session or membership check. They should move to a module without "use server" — tracked as a
-// follow-up; listed here by name so they can't be joined by a new one unnoticed.
-const KNOWN_UNGATED_EXPORTS = ["getWorkItemAndProject", "workItemIsAncestorOf", "applyPendingInvitationsForUser"];
-
 describe("every exported Server Action is classified", () => {
   const exported = [
     accountsInvitationsModule,
@@ -254,14 +248,14 @@ describe("every exported Server Action is classified", () => {
   ].flatMap((module) => Object.entries(module).filter(([, value]) => typeof value === "function").map(([name]) => name));
 
   it("has no export missing from the permission sweep, the membership-only reads or the known exceptions", () => {
-    const classified = new Set([...CASES.map((c) => c.action), ...MEMBERSHIP_ONLY_READS, ...KNOWN_UNGATED_EXPORTS]);
+    const classified = new Set([...CASES.map((c) => c.action), ...MEMBERSHIP_ONLY_READS]);
     const unclassified = exported.filter((name) => !classified.has(name));
 
     expect(unclassified, "add each new action to CASES (mutations) or MEMBERSHIP_ONLY_READS (reads)").toEqual([]);
   });
 
   it("has no stale entry naming an action that no longer exists", () => {
-    const stale = [...CASES.map((c) => c.action), ...MEMBERSHIP_ONLY_READS, ...KNOWN_UNGATED_EXPORTS].filter(
+    const stale = [...CASES.map((c) => c.action), ...MEMBERSHIP_ONLY_READS].filter(
       (name) => !exported.includes(name),
     );
 
