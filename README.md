@@ -5,7 +5,7 @@ An open-source, self-hostable Kanban board for personal and team projects — ac
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Status: Phase 2 complete](https://img.shields.io/badge/status-phase%202%20complete-brightgreen)](specs/)
 
-> **Project status**: **Phases 1 and 2 are implemented** — accounts, invitations, projects, the Kanban board, Work Items, their relationships, a dedicated detail view, and per-project roles (Owner / Member / Viewer) all work end-to-end against a real Postgres (Neon) database. See [Project Status](#project-status) for what's next.
+> **Project status**: **Phases 1 and 2 are implemented** — accounts, invitations, projects, the Kanban board, Work Items, their relationships, a dedicated detail view, and per-project roles (Owner / Member / Viewer) all work end-to-end against a real Postgres (Neon) database in local development; no instance has been deployed yet. See [Project Status](#project-status) for what's next.
 
 ## Why this project exists
 
@@ -102,6 +102,7 @@ Any host that runs a persistent Node.js process works — the app is a standard 
 1. Create a Web Service, connect this repository.
 2. Set the same environment variables as above in Render's dashboard.
 3. Set the build command to `npm run build` and the start command to `npm start`.
+4. Before each deploy that ships new files under `db/migrations/`, run `npm run db:migrate` with `DATABASE_URL` pointing at that instance's database — migrate first, then ship the code that depends on it.
 
 See [`specs/001-accounts-invitations/plan.md`](specs/001-accounts-invitations/plan.md#acciones-manuales-requeridas) for the full list of one-time manual setup steps and why each platform was chosen over alternatives (Vercel, Railway).
 
@@ -112,6 +113,7 @@ This project follows **Spec-Driven Development**: every feature is specified, cl
 - ✅ **Project constitution** ratified ([`.specify/memory/constitution.md`](.specify/memory/constitution.md))
 - ✅ **Phase 1 (MVP core)** fully specified, planned, and **implemented** — 121/121 tasks done across [`specs/001-accounts-invitations`](specs/001-accounts-invitations/), including P1 (MVP), P2/P3 (invitations, project/board/Work Item management), and Polish (loading states, error boundary, accessibility, unit tests)
 - ✅ **Phase 2 (depth)** — Work Item relationships ([`specs/005-work-item-relationships`](specs/005-work-item-relationships/)), the Work Item detail view ([`specs/006-work-item-detail-view`](specs/006-work-item-detail-view/)) and roles & permissions ([`specs/007-roles-permissions`](specs/007-roles-permissions/)) **implemented**, with the full unit and end-to-end suites green; the manual end-to-end pass of 007's `quickstart.md` (T057) is still open
+- ⬜ **Deployment** — nothing is deployed yet (no Render service). All migrations (`0000`-`0003`) are applied to the development Neon database; `main` on GitHub has the full Phase 2 code
 - ⬜ **Phase 3** (list/table/calendar views, extended fields) — not specified yet, not yet confirmed in scope
 
 ## Roadmap

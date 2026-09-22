@@ -32,7 +32,7 @@ This project's stack was deliberately chosen *against* some choices that would o
 
 ## Current state of the codebase
 
-Phases 1 and 2 are implemented (`001`-`007`); Phase 3 isn't specified yet. The source follows the layout in `specs/001-accounts-invitations/plan.md` § Project Structure: routes in `app/`, the Drizzle schema and migrations in `db/`, Server Actions in `lib/actions/` (every export of those `"use server"` files is a public endpoint), plain server-only helpers in `lib/` (`permissions.ts`, `roles.ts`, `work-item-queries.ts`, `invitations.ts`), UI in `components/`, and Vitest/Playwright suites in `tests/unit/` and `tests/e2e/`. Check `README.md` § Project Status for the up-to-date picture.
+Phases 1 and 2 are implemented (`001`-`007`) and merged to `main`; Phase 3 isn't specified yet. Nothing is deployed: the only running database is the development Neon one (all migrations applied), so there is no production data to protect — but still confirm before running e2e, which truncates it. The source follows the layout in `specs/001-accounts-invitations/plan.md` § Project Structure: routes in `app/`, the Drizzle schema and migrations in `db/`, Server Actions in `lib/actions/` (every export of those `"use server"` files is a public endpoint), plain server-only helpers in `lib/` (`permissions.ts`, `roles.ts`, `work-item-queries.ts`, `invitations.ts`), UI in `components/`, and Vitest/Playwright suites in `tests/unit/` and `tests/e2e/`. Check `README.md` § Project Status for the up-to-date picture.
 
 ## Working with `tasks.md`
 
