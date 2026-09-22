@@ -10,9 +10,13 @@ import {
   index,
   pgEnum,
   check,
+  boolean,
+  date,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+// Relative (not "@/") so drizzle-kit can load this file without the tsconfig path alias.
+import { WORK_ITEM_LEVELS } from "../lib/work-item-fields";
 
 /**
  * `userId` / `ownerId` / `invitedByUserId` columns below are `text`, not a
@@ -36,6 +40,11 @@ export const invitationStatusEnum = pgEnum("invitation_status", [
   "cancelled",
 ]);
 export const notificationTypeEnum = pgEnum("notification_type", ["invitation"]);
+// 008-work-item-fields (FR-002/FR-003): two fixed four-level scales. Built from
+// WORK_ITEM_LEVELS, whose order is urgency order — Postgres sorts enums by
+// declaration, so `ORDER BY priority` puts the most urgent first.
+export const workItemPriorityEnum = pgEnum("work_item_priority", WORK_ITEM_LEVELS);
+export const workItemSeverityEnum = pgEnum("work_item_severity", WORK_ITEM_LEVELS);
 
 // --- Proyecto (data-model.md § Proyecto) ---
 export const projects = pgTable("projects", {
@@ -132,9 +141,43 @@ export const stages = pgTable(
       .references(() => projects.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     position: integer("position").notNull(),
+    // FR-011 of 008-work-item-fields: a Work Item in a closing column is
+    // closed (FR-012) — see work_items.closed_at for the invariant.
+    isClosing: boolean("is_closing").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index("stages_project_id_idx").on(table.projectId)],
+);
+
+// --- Área / Iteración (008-work-item-fields data-model.md) ---
+// Two separate per-project catalogs with the same shape as `tags`: values are
+// created inline from a Work Item and reused case-insensitively (FR-006). The
+// client only ever sends names, resolved within the Work Item's project
+// (lib/work-item-catalogs.ts), so an id from another project can't be assigned.
+export const areas = pgTable(
+  "areas",
+  {
+    id: serial("id").primaryKey(),
+    projectId: integer("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+  },
+  (table) => [uniqueIndex("areas_project_lower_name_idx").on(table.projectId, sql`lower(${table.name})`)],
+);
+
+export const iterations = pgTable(
+  "iterations",
+  {
+    id: serial("id").primaryKey(),
+    projectId: integer("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+  },
+  (table) => [
+    uniqueIndex("iterations_project_lower_name_idx").on(table.projectId, sql`lower(${table.name})`),
+  ],
 );
 
 // --- Work Item (data-model.md § Work Item) ---
@@ -159,6 +202,21 @@ export const workItems = pgTable(
     parentWorkItemId: integer("parent_work_item_id").references((): AnyPgColumn => workItems.id, {
       onDelete: "set null",
     }),
+    // 008-work-item-fields data-model.md § Work Item — all optional.
+    priority: workItemPriorityEnum("priority"),
+    severity: workItemSeverityEnum("severity"),
+    // `set null` is only defensive: no flow deletes a catalog value (FR-007),
+    // and deleting the project already cascades to its Work Items.
+    areaId: integer("area_id").references(() => areas.id, { onDelete: "set null" }),
+    iterationId: integer("iteration_id").references(() => iterations.id, { onDelete: "set null" }),
+    // Calendar days with no time (FR-009); string mode keeps them "YYYY-MM-DD"
+    // instead of a Date at UTC midnight that shifts a day across time zones.
+    startDate: date("start_date", { mode: "string" }),
+    targetDate: date("target_date", { mode: "string" }),
+    // Written ONLY by the system, via nextClosedAt (lib/work-item-closing.ts).
+    // Invariant (SC-006): closed_at IS NOT NULL ⇔ this Work Item's stage has
+    // is_closing = true. "Closed" itself is derived from the stage, not stored.
+    closedAt: timestamp("closed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -169,6 +227,11 @@ export const workItems = pgTable(
     index("work_items_stage_id_idx").on(table.stageId),
     // Listing a Work Item's children (005-work-item-relationships) filters on this.
     index("work_items_parent_work_item_id_idx").on(table.parentWorkItemId),
+    // FR-009 of 008-work-item-fields; updateWorkItem checks it first with a friendlier error.
+    check(
+      "work_items_dates_order_check",
+      sql`${table.startDate} IS NULL OR ${table.targetDate} IS NULL OR ${table.targetDate} >= ${table.startDate}`,
+    ),
   ],
 );
 

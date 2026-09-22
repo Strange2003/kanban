@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
-import { stages, workItems } from "@/db/schema";
+import { stages, workItems, workItemActivity } from "@/db/schema";
 import { requireProjectMember, requireProjectPermission } from "@/lib/permissions";
 import { generatePublicId } from "@/lib/ids";
 import { AppError, runAction, type Result } from "@/lib/errors";
@@ -162,6 +162,59 @@ export async function deleteStage(input: { projectPublicId: string; stageId: str
     }
 
     await db.delete(stages).where(eq(stages.id, stage.id));
+
+    revalidatePath(`/projects/${input.projectPublicId}`);
+  });
+}
+
+// FR-011/FR-013 of 008-work-item-fields: marking a column as closing closes
+// every Work Item in it (closed_at = now), unmarking reopens them all. The
+// stage row is locked FOR UPDATE so it serializes with moves into or out of
+// it, which lock the same row FOR SHARE (research.md § Concurrencia) — no
+// Work Item can end up on the wrong side of the closing invariant (SC-006).
+export async function setStageClosing(input: {
+  projectPublicId: string;
+  stagePublicId: string;
+  isClosing: boolean;
+}): Promise<Result<void>> {
+  return runAction(async () => {
+    const { project } = await requireProjectPermission(input.projectPublicId, "board:edit");
+
+    await db.transaction(async (tx) => {
+      const [stage] = await tx
+        .select()
+        .from(stages)
+        .where(and(eq(stages.publicId, input.stagePublicId), eq(stages.projectId, project.id)))
+        .limit(1)
+        .for("update");
+      if (!stage) throw new AppError("NOT_FOUND", "Column not found.");
+      // Idempotent: re-sending the current value writes nothing and logs nothing.
+      if (stage.isClosing === input.isClosing) return;
+
+      await tx.update(stages).set({ isClosing: input.isClosing }).where(eq(stages.id, stage.id));
+
+      const now = new Date();
+      const affected = await tx
+        .update(workItems)
+        .set({ closedAt: input.isClosing ? now : null, updatedAt: now })
+        .where(eq(workItems.stageId, stage.id))
+        .returning({ id: workItems.id });
+
+      // Estándares de Producto y Datos § Auditoría: one event per Work Item, in one insert.
+      if (affected.length > 0) {
+        await tx.insert(workItemActivity).values(
+          affected.map(({ id }) =>
+            input.isClosing
+              ? {
+                  workItemId: id,
+                  type: "closed",
+                  payload: { closedAt: now.toISOString(), stageName: stage.name, via: "stage_marked" },
+                }
+              : { workItemId: id, type: "reopened", payload: { stageName: stage.name, via: "stage_unmarked" } },
+          ),
+        );
+      }
+    });
 
     revalidatePath(`/projects/${input.projectPublicId}`);
   });

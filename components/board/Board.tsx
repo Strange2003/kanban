@@ -4,13 +4,14 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, horizontalListSortingStrategy } from "@dnd-kit/sortable";
-import { reorderStages, type StageWithCount } from "@/lib/actions/board";
+import { reorderStages, setStageClosing, type StageWithCount } from "@/lib/actions/board";
 import { moveWorkItem, reorderWorkItemsInStage, type WorkItemWithDisplayId } from "@/lib/actions/work-items";
 import { StageColumn } from "@/components/board/StageColumn";
 import { isRolePermissionError } from "@/lib/errors";
 import { can, type ProjectRole } from "@/lib/roles";
 import { AddStageButton } from "@/components/board/AddStageButton";
 import { useToast } from "@/components/ui/toast";
+import { nextClosedAt } from "@/lib/work-item-closing";
 
 export function Board({
   projectPublicId,
@@ -83,9 +84,19 @@ export function Board({
 
     const previous = workItemsState;
     const toPosition = workItemsState.filter((wi) => wi.stageId === toStageId).length;
+    // 008-work-item-fields: same closing rule the server applies (nextClosedAt),
+    // so moving into/out of a closing column flips "overdue" instantly.
+    const fromStage = stagesState.find((s) => s.id === current.stageId);
+    const toStage = stagesState.find((s) => s.id === toStageId);
+    const { closedAt } = nextClosedAt({
+      fromIsClosing: fromStage?.isClosing ?? false,
+      toIsClosing: toStage?.isClosing ?? false,
+      currentClosedAt: current.closedAt,
+      now: new Date(),
+    });
 
     setWorkItemsState((items) =>
-      items.map((wi) => (wi.id === workItemId ? { ...wi, stageId: toStageId, position: toPosition } : wi)),
+      items.map((wi) => (wi.id === workItemId ? { ...wi, stageId: toStageId, position: toPosition, closedAt } : wi)),
     );
 
     const result = await moveWorkItem({ workItemId, toStageId, toPosition });
@@ -94,6 +105,32 @@ export function Board({
       toast(result.error.message, "destructive");
       if (isRolePermissionError(result)) router.refresh();
     }
+  }
+
+  // FR-011/FR-013 of 008-work-item-fields: marking a column closes all of its
+  // Work Items and unmarking reopens them — applied optimistically to both the
+  // column and its cards, reverted on failure (Principle I).
+  async function handleToggleClosing(stage: StageWithCount) {
+    const isClosing = !stage.isClosing;
+    const previousStages = stagesState;
+    const previousItems = workItemsState;
+    const now = new Date();
+
+    setStagesState((all) => all.map((s) => (s.id === stage.id ? { ...s, isClosing } : s)));
+    setWorkItemsState((items) =>
+      items.map((wi) => (wi.stageId === stage.id ? { ...wi, closedAt: isClosing ? now : null } : wi)),
+    );
+
+    const result = await setStageClosing({ projectPublicId, stagePublicId: stage.publicId, isClosing });
+    if (!result.ok) {
+      setStagesState(previousStages);
+      setWorkItemsState(previousItems);
+      toast(result.error.message, "destructive");
+      if (isRolePermissionError(result)) router.refresh();
+      return;
+    }
+    // Pick up the server's exact closing timestamps.
+    router.refresh();
   }
 
   // FR-006 of 004-work-items, same optimistic + revert-on-failure pattern.
@@ -162,6 +199,7 @@ export function Board({
                 projectPublicId={projectPublicId}
                 canEdit={canEdit}
                 stage={stage}
+                onToggleClosing={handleToggleClosing}
                 workItems={workItemsState
                   .filter((wi) => wi.stageId === stage.id)
                   .sort((a, b) => a.position - b.position)}

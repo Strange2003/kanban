@@ -3,12 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { and, asc, eq, or, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { workItems, workItemRelatedLinks, workItemActivity } from "@/db/schema";
+import { workItems, workItemRelatedLinks, workItemActivity, stages, areas, iterations } from "@/db/schema";
 import { requireProjectMember, requireProjectPermission } from "@/lib/permissions";
 import { AppError, runAction, type Result } from "@/lib/errors";
 import type { ProjectRole } from "@/lib/roles";
 import { listProjectTags, getWorkItemTags, listWorkItemActivity } from "@/lib/actions/work-items";
 import { getWorkItemAndProject, workItemIsAncestorOf } from "@/lib/work-item-queries";
+import { listCatalog } from "@/lib/work-item-catalogs";
 
 // A Work Item reference as shown in a relations list — enough to render and
 // navigate to it without an extra query (FR-009/FR-010 of 005-work-item-relationships).
@@ -359,7 +360,51 @@ export type WorkItemDetailData = {
   // The caller's current role in the project (FR-005 of 007-roles-permissions):
   // lets the detail view render read-only for a Viewer.
   role: ProjectRole;
+  // 008-work-item-fields: the area/iteration catalogs (FR-005/FR-006), this Work
+  // Item's values by name, its column — `isClosing` means it's closed (FR-012) —
+  // and whether the project has any closing column to enable "Close" (FR-014).
+  catalogAreas: string[];
+  catalogIterations: string[];
+  itemArea: string | null;
+  itemIteration: string | null;
+  stage: { name: string; isClosing: boolean };
+  hasClosingStage: boolean;
 };
+
+// The closing/catalog part of the detail data. Not exported (this is a "use
+// server" file); only called after getWorkItemDetailData's membership check,
+// and every lookup is scoped to that project.
+async function getFieldsDetail(projectId: number, workItemId: number) {
+  const [row] = await db
+    .select({ stageName: stages.name, isClosing: stages.isClosing, areaName: areas.name, iterationName: iterations.name })
+    .from(workItems)
+    .innerJoin(stages, eq(stages.id, workItems.stageId))
+    .leftJoin(areas, eq(areas.id, workItems.areaId))
+    .leftJoin(iterations, eq(iterations.id, workItems.iterationId))
+    .where(and(eq(workItems.id, workItemId), eq(workItems.projectId, projectId)))
+    .limit(1);
+  if (!row) throw new AppError("NOT_FOUND", "Work item not found.");
+
+  const [closing] = await db
+    .select({ id: stages.id })
+    .from(stages)
+    .where(and(eq(stages.projectId, projectId), eq(stages.isClosing, true)))
+    .limit(1);
+
+  const [catalogAreas, catalogIterations] = await Promise.all([
+    listCatalog("area", projectId),
+    listCatalog("iteration", projectId),
+  ]);
+
+  return {
+    catalogAreas,
+    catalogIterations,
+    itemArea: row.areaName,
+    itemIteration: row.iterationName,
+    stage: { name: row.stageName, isClosing: row.isClosing },
+    hasClosingStage: closing !== undefined,
+  };
+}
 
 /**
  * Everything `WorkItemDetailPanel` needs to render a Work Item, in a single
@@ -377,7 +422,7 @@ export async function getWorkItemDetailData(
 ): Promise<Result<WorkItemDetailData>> {
   return runAction(async () => {
     const [
-      { membership },
+      { membership, project },
       catalogResult,
       itemTagsResult,
       activityResult,
@@ -410,6 +455,7 @@ export async function getWorkItemDetailData(
       relations: relationsResult.data,
       pickableWorkItems: pickableResult.data,
       role: membership.role,
+      ...(await getFieldsDetail(project.id, workItemId)),
     };
   });
 }

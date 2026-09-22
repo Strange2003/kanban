@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { updateWorkItem, deleteWorkItem, type WorkItemWithDisplayId } from "@/lib/actions/work-items";
+import { updateWorkItem, deleteWorkItem, closeWorkItem, type WorkItemWithDisplayId } from "@/lib/actions/work-items";
 import {
   setWorkItemParent,
   removeWorkItemParent,
@@ -19,15 +19,55 @@ import { TagPicker } from "@/components/work-items/TagPicker";
 import { ReadOnlyNotice } from "@/components/ui/read-only-notice";
 import { isRolePermissionError } from "@/lib/errors";
 import { can } from "@/lib/roles";
+import { CatalogPicker } from "@/components/work-items/CatalogPicker";
+import { LocalDate } from "@/components/ui/local-date";
+import { formatCalendarDate, useLocalToday } from "@/lib/dates";
+import { LEVEL_LABELS, WORK_ITEM_LEVELS, isOverdue, type WorkItemLevel } from "@/lib/work-item-fields";
 
 type ActivityEntry = { id: number; type: string; payload: unknown; createdAt: Date };
+
+// 008-work-item-fields (FR-020): these fields are shown with their previous
+// and new value; the older ones keep the "Edited …" summary.
+const FIELD_LABELS: Record<string, string> = {
+  priority: "Priority",
+  severity: "Severity",
+  area: "Area",
+  iteration: "Iteration",
+  startDate: "Start date",
+  targetDate: "Target date",
+};
+
+function formatFieldValue(field: string, value: unknown): string {
+  if (value === null || value === undefined || value === "") return "None";
+  if (field === "priority" || field === "severity") return LEVEL_LABELS[value as WorkItemLevel] ?? String(value);
+  if (field === "startDate" || field === "targetDate") return formatCalendarDate(String(value));
+  return String(value);
+}
 
 function describeActivity(entry: ActivityEntry): string {
   if (entry.type === "stage_changed") return "Moved to a different column";
   if (entry.type === "fields_edited") {
-    const payload = entry.payload as { fields?: Record<string, unknown> };
-    const fields = payload.fields ? Object.keys(payload.fields) : [];
-    return fields.length > 0 ? `Edited ${fields.join(", ")}` : "Edited";
+    const payload = entry.payload as { fields?: Record<string, { from: unknown; to: unknown }> };
+    const fields = payload.fields ?? {};
+    const legacy = Object.keys(fields).filter((f) => !(f in FIELD_LABELS));
+    const parts = [
+      ...(legacy.length > 0 ? [`Edited ${legacy.join(", ")}`] : []),
+      ...Object.entries(fields)
+        .filter(([f]) => f in FIELD_LABELS)
+        .map(([f, c]) => `${FIELD_LABELS[f]}: ${formatFieldValue(f, c.from)} → ${formatFieldValue(f, c.to)}`),
+    ];
+    return parts.length > 0 ? parts.join("; ") : "Edited";
+  }
+  if (entry.type === "closed") {
+    const { stageName, via } = entry.payload as { stageName: string; via: string };
+    if (via === "stage_marked") return `Closed: column ${stageName} marked as closing`;
+    if (via === "created") return `Closed (created in ${stageName})`;
+    return `Closed (moved to ${stageName})`;
+  }
+  if (entry.type === "reopened") {
+    const { stageName, via } = entry.payload as { stageName: string; via: string };
+    if (via === "stage_unmarked") return `Reopened: column ${stageName} unmarked as closing`;
+    return `Reopened (moved to ${stageName})`;
   }
   if (entry.type === "parent_linked") return "Linked to a parent Work Item";
   if (entry.type === "parent_unlinked") return "Unlinked from its parent Work Item";
@@ -67,6 +107,15 @@ export function WorkItemDetailView({
   const [title, setTitle] = useState(workItem.title);
   const [description, setDescription] = useState(workItem.description ?? "");
   const [stakeholder, setStakeholder] = useState(workItem.stakeholder ?? "");
+  // 008-work-item-fields "Planning" fields, saved with the same Save button.
+  const [priority, setPriority] = useState<WorkItemLevel | null>(workItem.priority);
+  const [severity, setSeverity] = useState<WorkItemLevel | null>(workItem.severity);
+  const [area, setArea] = useState(initialDetail.itemArea);
+  const [iteration, setIteration] = useState(initialDetail.itemIteration);
+  const [startDate, setStartDate] = useState(workItem.startDate ?? "");
+  const [targetDate, setTargetDate] = useState(workItem.targetDate ?? "");
+  const [closing, setClosing] = useState(false);
+  const today = useLocalToday();
   const [selectedTags, setSelectedTags] = useState(initialDetail.itemTags);
   const [catalogTags, setCatalogTags] = useState(initialDetail.catalogTags);
   const [activity, setActivity] = useState<ActivityEntry[]>(initialDetail.activity);
@@ -80,6 +129,16 @@ export function WorkItemDetailView({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // After a router.refresh() (Save, Close, …) the server sends fresh detail
+  // data: pick up the new activity entries right away (FR-020 of
+  // 008-work-item-fields) — but only the activity, which the user can't edit,
+  // so no unsaved field is ever overwritten.
+  const [prevActivity, setPrevActivity] = useState(initialDetail.activity);
+  if (initialDetail.activity !== prevActivity) {
+    setPrevActivity(initialDetail.activity);
+    setActivity(initialDetail.activity);
+  }
+
   // This component instance is reused across client-side transitions
   // between related Work Items' routes (Next.js doesn't remount it just
   // because a <Link> changed the URL) — reset every piece of state to the
@@ -92,6 +151,12 @@ export function WorkItemDetailView({
     setTitle(workItem.title);
     setDescription(workItem.description ?? "");
     setStakeholder(workItem.stakeholder ?? "");
+    setPriority(workItem.priority);
+    setSeverity(workItem.severity);
+    setArea(initialDetail.itemArea);
+    setIteration(initialDetail.itemIteration);
+    setStartDate(workItem.startDate ?? "");
+    setTargetDate(workItem.targetDate ?? "");
     setSelectedTags(initialDetail.itemTags);
     setCatalogTags(initialDetail.catalogTags);
     setActivity(initialDetail.activity);
@@ -175,6 +240,12 @@ export function WorkItemDetailView({
       description,
       stakeholder,
       tagNames: selectedTags,
+      priority,
+      severity,
+      areaName: area,
+      iterationName: iteration,
+      startDate: startDate || null,
+      targetDate: targetDate || null,
     });
     setSubmitting(false);
 
@@ -183,6 +254,18 @@ export function WorkItemDetailView({
       if (isRolePermissionError(result)) router.refresh();
       return;
     }
+    router.refresh();
+  }
+
+  // FR-014 of 008-work-item-fields: the server moves the Work Item to the first
+  // closing column. Then just refresh — no second Server Action chained from
+  // the client (005 research.md § Hallazgo).
+  async function handleClose() {
+    setError(null);
+    setClosing(true);
+    const result = await closeWorkItem(workItem.id);
+    setClosing(false);
+    if (!result.ok) setError(result.error.message);
     router.refresh();
   }
 
@@ -200,6 +283,9 @@ export function WorkItemDetailView({
   }
 
   const { parent, children, related } = relations;
+  // Closed ⇔ in a closing column (FR-012) — derived, never stored.
+  const isClosed = initialDetail.stage.isClosing;
+  const overdue = today !== null && isOverdue(workItem.targetDate, workItem.closedAt, today);
   const hasNoRelations = !parent && children.length === 0 && related.length === 0;
 
   return (
@@ -244,6 +330,97 @@ export function WorkItemDetailView({
           <Label>Tags</Label>
           <TagPicker catalog={catalogTags} selected={selectedTags} onChange={setSelectedTags} disabled={!canEdit} />
         </div>
+
+        <fieldset className="space-y-3 rounded-md border border-border p-3" data-testid="planning-section">
+          <legend className="px-1 text-sm font-medium">Planning</legend>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="wi-priority">Priority</Label>
+              <select
+                id="wi-priority"
+                value={priority ?? ""}
+                onChange={(e) => setPriority((e.target.value || null) as WorkItemLevel | null)}
+                disabled={!canEdit}
+                className={selectClassName}
+              >
+                <option value="">None</option>
+                {WORK_ITEM_LEVELS.map((level) => (
+                  <option key={level} value={level}>
+                    {LEVEL_LABELS[level]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="wi-severity">Severity</Label>
+              <select
+                id="wi-severity"
+                value={severity ?? ""}
+                onChange={(e) => setSeverity((e.target.value || null) as WorkItemLevel | null)}
+                disabled={!canEdit}
+                className={selectClassName}
+              >
+                <option value="">None</option>
+                {WORK_ITEM_LEVELS.map((level) => (
+                  <option key={level} value={level}>
+                    {LEVEL_LABELS[level]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="wi-area">Area</Label>
+              <CatalogPicker
+                id="wi-area"
+                label="Area"
+                catalog={initialDetail.catalogAreas}
+                value={area}
+                onChange={setArea}
+                disabled={!canEdit}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="wi-iteration">Iteration</Label>
+              <CatalogPicker
+                id="wi-iteration"
+                label="Iteration"
+                catalog={initialDetail.catalogIterations}
+                value={iteration}
+                onChange={setIteration}
+                disabled={!canEdit}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="wi-start-date">Start date</Label>
+              <Input
+                id="wi-start-date"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                readOnly={!canEdit}
+                disabled={!canEdit}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="wi-target-date">
+                Target date
+                {overdue && (
+                  <span className="ml-2 text-xs font-medium text-destructive" data-testid="detail-overdue">
+                    Overdue
+                  </span>
+                )}
+              </Label>
+              <Input
+                id="wi-target-date"
+                type="date"
+                value={targetDate}
+                onChange={(e) => setTargetDate(e.target.value)}
+                readOnly={!canEdit}
+                disabled={!canEdit}
+              />
+            </div>
+          </div>
+        </fieldset>
 
         <div className="space-y-2">
           <Label>Relations</Label>
@@ -368,6 +545,50 @@ export function WorkItemDetailView({
               <Button type="button" size="sm" onClick={handleLinkRelated} disabled={!relatedPick || relationsBusy}>
                 Link
               </Button>
+            </div>
+          )}
+        </div>
+
+        {/* FR-008/FR-014 of 008-work-item-fields: system-managed, never editable. */}
+        <div className="space-y-2" data-testid="dates-section">
+          <Label>Dates</Label>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+            <dt className="text-muted-foreground">Created</dt>
+            <dd>
+              <LocalDate value={workItem.createdAt} />
+            </dd>
+            <dt className="text-muted-foreground">Last modified</dt>
+            <dd>
+              <LocalDate value={workItem.updatedAt} />
+            </dd>
+            <dt className="text-muted-foreground">Status</dt>
+            <dd data-testid="work-item-status">
+              {isClosed && workItem.closedAt ? (
+                <>
+                  Closed on <LocalDate value={workItem.closedAt} /> · {initialDetail.stage.name}
+                </>
+              ) : (
+                "Open"
+              )}
+            </dd>
+          </dl>
+          {canEdit && !isClosed && (
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleClose}
+                disabled={!initialDetail.hasClosingStage || closing}
+                aria-describedby={initialDetail.hasClosingStage ? undefined : "wi-close-hint"}
+              >
+                {closing ? "Closing..." : "Close"}
+              </Button>
+              {!initialDetail.hasClosingStage && (
+                <p id="wi-close-hint" className="text-muted-foreground text-xs">
+                  Mark a column as a closing column on the board to enable Close.
+                </p>
+              )}
             </div>
           )}
         </div>

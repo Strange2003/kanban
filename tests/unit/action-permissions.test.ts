@@ -37,7 +37,7 @@ vi.mock("@/db/client", async () => {
       case "project_members":
         return [{ projectId: 1, userId: "actor", role: state.role }];
       case "stages":
-        return [{ id: 1, publicId: "stage-1", projectId: 1, name: "S", position: 0 }];
+        return [{ id: 1, publicId: "stage-1", projectId: 1, name: "S", position: 0, isClosing: false }];
       case "invitations":
         return [
           {
@@ -91,13 +91,14 @@ vi.mock("@/db/client", async () => {
   };
 });
 
-import { createStage, reorderStages, renameStage, deleteStage } from "@/lib/actions/board";
+import { createStage, reorderStages, renameStage, deleteStage, setStageClosing } from "@/lib/actions/board";
 import {
   createWorkItem,
   moveWorkItem,
   reorderWorkItemsInStage,
   updateWorkItem,
   deleteWorkItem,
+  closeWorkItem,
 } from "@/lib/actions/work-items";
 import {
   setWorkItemParent,
@@ -140,13 +141,17 @@ export const CASES: Case[] = [
   { action: "reorderStages", permission: "board:edit", run: () => reorderStages({ projectPublicId: P, orderedStageIds: ["stage-1"] }), denied: READ_ONLY_DENIED, allowed: EDITORS },
   { action: "renameStage", permission: "board:edit", run: () => renameStage({ projectPublicId: P, stageId: "stage-1", name: "Renamed" }), denied: READ_ONLY_DENIED, allowed: EDITORS },
   { action: "deleteStage", permission: "board:edit", run: () => deleteStage({ projectPublicId: P, stageId: "stage-1" }), denied: READ_ONLY_DENIED, allowed: EDITORS },
+  // 008-work-item-fields (FR-011): marking a closing column is a board edit.
+  { action: "setStageClosing", permission: "board:edit", run: () => setStageClosing({ projectPublicId: P, stagePublicId: "stage-1", isClosing: true }), denied: READ_ONLY_DENIED, allowed: EDITORS },
 
   // --- workItem:edit (lib/actions/work-items.ts)
   { action: "createWorkItem", permission: "workItem:edit", run: () => createWorkItem({ stagePublicId: "stage-1", title: "New" }), denied: READ_ONLY_DENIED, allowed: EDITORS },
   { action: "moveWorkItem", permission: "workItem:edit", run: () => moveWorkItem({ workItemId: 1, toStageId: 1, toPosition: 0 }), denied: READ_ONLY_DENIED, allowed: EDITORS },
   { action: "reorderWorkItemsInStage", permission: "workItem:edit", run: () => reorderWorkItemsInStage({ stageId: 1, orderedWorkItemIds: [1] }), denied: READ_ONLY_DENIED, allowed: EDITORS },
-  { action: "updateWorkItem", permission: "workItem:edit", run: () => updateWorkItem({ workItemId: 1, title: "Edited", tagNames: ["new-tag"] }), denied: READ_ONLY_DENIED, allowed: EDITORS },
+  { action: "updateWorkItem", permission: "workItem:edit", run: () => updateWorkItem({ workItemId: 1, title: "Edited", tagNames: ["new-tag"], priority: "high", severity: "low", areaName: "Frontend", iterationName: "Sprint 1", startDate: "2026-10-01", targetDate: "2026-10-15" }), denied: READ_ONLY_DENIED, allowed: EDITORS },
   { action: "deleteWorkItem", permission: "workItem:edit", run: () => deleteWorkItem(1), denied: READ_ONLY_DENIED, allowed: EDITORS },
+  // 008-work-item-fields (FR-014/FR-019): "Close" moves the Work Item, so it's a Work Item edit.
+  { action: "closeWorkItem", permission: "workItem:edit", run: () => closeWorkItem(1), denied: READ_ONLY_DENIED, allowed: EDITORS },
 
   // --- relationship:edit (lib/actions/work-item-relationships.ts)
   { action: "setWorkItemParent", permission: "relationship:edit", run: () => setWorkItemParent({ workItemId: 1, parentWorkItemId: 2 }), denied: READ_ONLY_DENIED, allowed: EDITORS },

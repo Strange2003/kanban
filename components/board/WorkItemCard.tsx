@@ -6,6 +6,10 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { WorkItemWithDisplayId } from "@/lib/actions/work-items";
 import { cn } from "@/lib/utils";
+import { useLocalToday } from "@/lib/dates";
+import { LEVEL_LABELS, isOverdue } from "@/lib/work-item-fields";
+import { PriorityBadge } from "@/components/board/PriorityBadge";
+import { TargetDateChip } from "@/components/board/TargetDateChip";
 
 export function WorkItemCard({
   workItem,
@@ -27,6 +31,17 @@ export function WorkItemCard({
     data: { type: "work-item", workItemId: workItem.id, stageId: workItem.stageId },
     disabled: !canEdit,
   });
+  // 008-work-item-fields (SC-002): screen readers hear the priority and the
+  // overdue state that sighted users see on the card.
+  const today = useLocalToday();
+  const overdue = today !== null && isOverdue(workItem.targetDate, workItem.closedAt, today);
+  const ariaLabel = [
+    `${workItem.displayId}: ${workItem.title}`,
+    workItem.priority && `priority ${LEVEL_LABELS[workItem.priority]}`,
+    overdue && "overdue",
+  ]
+    .filter(Boolean)
+    .join(", ");
   const openDetail = () => router.push(`/projects/${projectPublicId}/work-items/${workItem.displayNumber}`);
 
   // The card follows the pointer while dragged, so releasing it fires a click on
@@ -68,7 +83,7 @@ export function WorkItemCard({
         pointerDownAt.current = { x: e.clientX, y: e.clientY };
       }}
       onClick={handleClick}
-      aria-label={`${workItem.displayId}: ${workItem.title}`}
+      aria-label={ariaLabel}
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
       className={cn(
         "rounded-md border border-border bg-background p-2 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
@@ -78,6 +93,13 @@ export function WorkItemCard({
     >
       <span className="text-muted-foreground text-xs">{workItem.displayId}</span>
       <p className="font-medium">{workItem.title}</p>
+      {/* FR-016 of 008: only priority and target date on the card — the rest lives in the detail view. */}
+      {(workItem.priority || workItem.targetDate) && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          {workItem.priority && <PriorityBadge level={workItem.priority} />}
+          {workItem.targetDate && <TargetDateChip targetDate={workItem.targetDate} closedAt={workItem.closedAt} />}
+        </div>
+      )}
     </div>
   );
 }

@@ -10,6 +10,7 @@ import type { WorkItemWithDisplayId } from "@/lib/actions/work-items";
 import { WorkItemCard } from "@/components/board/WorkItemCard";
 import { AddWorkItemButton } from "@/components/board/AddWorkItemButton";
 import { DeleteStageButton } from "@/components/board/DeleteStageButton";
+import { ClosingStageToggle } from "@/components/board/ClosingStageToggle";
 import { Input } from "@/components/ui/input";
 import { isRolePermissionError } from "@/lib/errors";
 
@@ -87,6 +88,7 @@ export function StageColumn({
   canEdit,
   stage,
   workItems,
+  onToggleClosing,
 }: {
   projectPublicId: string;
   // False for a Viewer (007-roles-permissions): no dragging, renaming,
@@ -94,6 +96,8 @@ export function StageColumn({
   canEdit: boolean;
   stage: StageWithCount;
   workItems: WorkItemWithDisplayId[];
+  // 008-work-item-fields (FR-011): Board owns the optimistic update.
+  onToggleClosing: (stage: StageWithCount) => void;
 }) {
   // One sortable registration per stage serves double duty: it's both the
   // reorder-columns drag source/target (FR-005 of 003) and the drop target
@@ -127,9 +131,22 @@ export function StageColumn({
             "cursor-grab active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         )}
       >
-        <StageName projectPublicId={projectPublicId} stage={stage} canEdit={canEdit} />
+        <div className="flex min-w-0 items-center gap-1.5">
+          <StageName projectPublicId={projectPublicId} stage={stage} canEdit={canEdit} />
+          {/* FR-011 of 008: visible to every role, Viewers included. */}
+          {stage.isClosing && (
+            <span
+              className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] leading-none font-medium text-emerald-700 dark:text-emerald-400"
+              title="Closing column: Work Items here are closed"
+              data-testid="closing-column-badge"
+            >
+              Closing
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-1">
           <span className="text-muted-foreground text-xs">{workItems.length}</span>
+          {canEdit && <ClosingStageToggle isClosing={stage.isClosing} onToggle={() => onToggleClosing(stage)} />}
           {canEdit && (
             <DeleteStageButton
               projectPublicId={projectPublicId}

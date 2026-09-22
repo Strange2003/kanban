@@ -1,15 +1,92 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, asc, desc, eq, gt, gte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
-import { workItems, stages, projects, workItemActivity, tags, workItemTags } from "@/db/schema";
+import { workItems, stages, projects, workItemActivity, tags, workItemTags, areas, iterations } from "@/db/schema";
 import { requireProjectMember, requireProjectPermission } from "@/lib/permissions";
 import { AppError, runAction, type Result } from "@/lib/errors";
 import { getWorkItemAndProject } from "@/lib/work-item-queries";
+import { resolveCatalogValue, type CatalogKind } from "@/lib/work-item-catalogs";
+import { WORK_ITEM_LEVELS, type WorkItemLevel } from "@/lib/work-item-fields";
+import { nextClosedAt } from "@/lib/work-item-closing";
 
 export type WorkItemWithDisplayId = typeof workItems.$inferSelect & { displayId: string };
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type StageRow = typeof stages.$inferSelect;
+type WorkItemRow = typeof workItems.$inferSelect;
+
+// Re-reads stage rows inside a transaction with FOR SHARE: setStageClosing takes
+// FOR UPDATE on the stage it changes, so a move and a (un)mark of the same
+// column serialize and the closing invariant can't be broken by a race
+// (008-work-item-fields research.md § Concurrencia). Moves don't block each other.
+async function lockStagesForShare(tx: Tx, stageIds: number[]): Promise<Map<number, StageRow>> {
+  const rows = await tx.select().from(stages).where(inArray(stages.id, stageIds)).for("share");
+  return new Map(rows.map((r) => [r.id, r]));
+}
+
+// Shared by moveWorkItem and closeWorkItem — NOT exported: every export of a
+// "use server" file is a public endpoint (AGENTS.md). Moves the Work Item and
+// keeps `closed_at` in line with its column through nextClosedAt (FR-012/FR-013),
+// logging stage_changed plus closed/reopened when the state flips (FR-020).
+async function moveWithinTx(
+  tx: Tx,
+  args: {
+    workItem: WorkItemRow;
+    fromStage: StageRow;
+    toStage: StageRow;
+    toPosition: number;
+    via: "move" | "close_button";
+  },
+) {
+  const { workItem, fromStage, toStage, toPosition, via } = args;
+  const now = new Date();
+  const transition = nextClosedAt({
+    fromIsClosing: fromStage.isClosing,
+    toIsClosing: toStage.isClosing,
+    currentClosedAt: workItem.closedAt,
+    now,
+  });
+
+  // Close the gap left behind in the origin stage.
+  await tx
+    .update(workItems)
+    .set({ position: sql`${workItems.position} - 1` })
+    .where(and(eq(workItems.stageId, fromStage.id), gt(workItems.position, workItem.position)));
+
+  // Make room at the target position in the destination stage.
+  await tx
+    .update(workItems)
+    .set({ position: sql`${workItems.position} + 1` })
+    .where(and(eq(workItems.stageId, toStage.id), gte(workItems.position, toPosition)));
+
+  await tx
+    .update(workItems)
+    .set({ stageId: toStage.id, position: toPosition, closedAt: transition.closedAt, updatedAt: now })
+    .where(eq(workItems.id, workItem.id));
+
+  // Estándares de Producto y Datos § Auditoría de la constitución.
+  await tx.insert(workItemActivity).values({
+    workItemId: workItem.id,
+    type: "stage_changed",
+    payload: { fromStageId: fromStage.id, toStageId: toStage.id },
+  });
+  if (transition.event === "closed") {
+    await tx.insert(workItemActivity).values({
+      workItemId: workItem.id,
+      type: "closed",
+      payload: { closedAt: transition.closedAt.toISOString(), stageName: toStage.name, via },
+    });
+  } else if (transition.event === "reopened") {
+    await tx.insert(workItemActivity).values({
+      workItemId: workItem.id,
+      type: "reopened",
+      payload: { stageName: toStage.name, via: "move" },
+    });
+  }
+}
 
 async function getStageAndProject(stagePublicId: string) {
   const [stage] = await db.select().from(stages).where(eq(stages.publicId, stagePublicId)).limit(1);
@@ -76,6 +153,15 @@ export async function createWorkItem(input: {
         .from(workItems)
         .where(eq(workItems.stageId, stage.id));
 
+      // Born in a closing column → born closed (008-work-item-fields Edge Cases, FR-013).
+      const lockedStage = (await lockStagesForShare(tx, [stage.id])).get(stage.id) ?? stage;
+      const transition = nextClosedAt({
+        fromIsClosing: null,
+        toIsClosing: lockedStage.isClosing,
+        currentClosedAt: null,
+        now: new Date(),
+      });
+
       const [created] = await tx
         .insert(workItems)
         .values({
@@ -84,10 +170,18 @@ export async function createWorkItem(input: {
           displayNumber: updatedProject.nextWorkItemNumber,
           title: parsed.data.title,
           position: (maxRow?.maxPosition ?? -1) + 1,
+          closedAt: transition.closedAt,
         })
         .returning();
 
       if (!created) throw new AppError("UNKNOWN_ERROR", "Could not create the Work Item.");
+      if (transition.event === "closed") {
+        await tx.insert(workItemActivity).values({
+          workItemId: created.id,
+          type: "closed",
+          payload: { closedAt: transition.closedAt.toISOString(), stageName: lockedStage.name, via: "created" },
+        });
+      }
       return created;
     });
 
@@ -111,31 +205,67 @@ export async function moveWorkItem(input: {
 
     await requireProjectPermission(project.publicId, "workItem:edit");
 
-    const fromStageId = workItem.stageId;
+    // Principle IV: `toStageId` comes from the client, so it must be a column of
+    // this Work Item's own project — the permission check above only covers the
+    // Work Item's project (008-work-item-fields research.md § Hallazgo).
+    const [toStage] = await db.select().from(stages).where(eq(stages.id, input.toStageId)).limit(1);
+    if (!toStage || toStage.projectId !== workItem.projectId) {
+      throw new AppError("NOT_FOUND", "Column not found.");
+    }
 
     await db.transaction(async (tx) => {
-      // Close the gap left behind in the origin stage.
-      await tx
-        .update(workItems)
-        .set({ position: sql`${workItems.position} - 1` })
-        .where(and(eq(workItems.stageId, fromStageId), gt(workItems.position, workItem.position)));
+      const locked = await lockStagesForShare(tx, [workItem.stageId, toStage.id]);
+      const fromStage = locked.get(workItem.stageId);
+      const lockedToStage = locked.get(toStage.id);
+      if (!fromStage || !lockedToStage) throw new AppError("NOT_FOUND", "Column not found.");
 
-      // Make room at the target position in the destination stage.
-      await tx
-        .update(workItems)
-        .set({ position: sql`${workItems.position} + 1` })
-        .where(and(eq(workItems.stageId, input.toStageId), gte(workItems.position, input.toPosition)));
+      await moveWithinTx(tx, {
+        workItem,
+        fromStage,
+        toStage: lockedToStage,
+        toPosition: input.toPosition,
+        via: "move",
+      });
+    });
 
-      await tx
-        .update(workItems)
-        .set({ stageId: input.toStageId, position: input.toPosition, updatedAt: new Date() })
-        .where(eq(workItems.id, input.workItemId));
+    revalidatePath(`/projects/${project.publicId}`);
+  });
+}
 
-      // Estándares de Producto y Datos § Auditoría de la constitución.
-      await tx.insert(workItemActivity).values({
-        workItemId: input.workItemId,
-        type: "stage_changed",
-        payload: { fromStageId, toStageId: input.toStageId },
+// FR-014 of 008-work-item-fields: the "Close" button moves the Work Item to
+// the end of the project's first closing column, which closes it exactly as
+// dragging it there would. The server picks the column inside the transaction,
+// so a mark changing meanwhile can't send it somewhere stale.
+export async function closeWorkItem(workItemId: number): Promise<Result<void>> {
+  return runAction(async () => {
+    const { workItem, project } = await getWorkItemAndProject(workItemId);
+    await requireProjectPermission(project.publicId, "workItem:edit");
+
+    await db.transaction(async (tx) => {
+      const [closingStage] = await tx
+        .select()
+        .from(stages)
+        .where(and(eq(stages.projectId, project.id), eq(stages.isClosing, true)))
+        .orderBy(asc(stages.position))
+        .limit(1)
+        .for("share");
+      if (!closingStage) throw new AppError("NO_CLOSING_STAGE", "Mark a column as a closing column first.");
+
+      const fromStage = (await lockStagesForShare(tx, [workItem.stageId])).get(workItem.stageId);
+      if (!fromStage) throw new AppError("NOT_FOUND", "Column not found.");
+      if (fromStage.isClosing) throw new AppError("ALREADY_CLOSED", "This Work Item is already closed.");
+
+      const [maxRow] = await tx
+        .select({ maxPosition: sql<number | null>`max(${workItems.position})` })
+        .from(workItems)
+        .where(eq(workItems.stageId, closingStage.id));
+
+      await moveWithinTx(tx, {
+        workItem,
+        fromStage,
+        toStage: closingStage,
+        toPosition: (maxRow?.maxPosition ?? -1) + 1,
+        via: "close_button",
       });
     });
 
@@ -161,7 +291,10 @@ export async function reorderWorkItemsInStage(input: {
       for (const [index, workItemId] of input.orderedWorkItemIds.entries()) {
         await tx
           .update(workItems)
-          .set({ position: index, updatedAt: new Date() })
+          // Not `updatedAt`: position within a column is board layout, not a
+          // change to the Work Item — reordering used to bump "Last modified"
+          // on every item in the column (008-work-item-fields research.md § `updated_at`).
+          .set({ position: index })
           .where(and(eq(workItems.id, workItemId), eq(workItems.stageId, input.stageId)));
       }
     });
@@ -170,20 +303,53 @@ export async function reorderWorkItemsInStage(input: {
   });
 }
 
+const levelSchema = z.enum(WORK_ITEM_LEVELS).nullable().optional();
+const calendarDateSchema = z.iso.date("Dates must be valid calendar days (YYYY-MM-DD).").nullable().optional();
+// "" or only spaces means "clear the value", same as sending null.
+const catalogNameSchema = z
+  .string()
+  .nullable()
+  .optional()
+  .transform((v) => (v === undefined ? undefined : v?.trim() || null));
+
 const updateWorkItemSchema = z.object({
   title: z.string().trim().min(1, "Title is required.").optional(),
   description: z.string().optional(),
   stakeholder: z.string().optional(),
   tagNames: z.array(z.string().trim().min(1)).optional(),
+  // 008-work-item-fields: `undefined` leaves a field alone, `null` clears it.
+  priority: levelSchema,
+  severity: levelSchema,
+  areaName: catalogNameSchema,
+  iterationName: catalogNameSchema,
+  startDate: calendarDateSchema,
+  targetDate: calendarDateSchema,
 });
 
-// FR-007/FR-008/FR-009/FR-012/FR-013 of 004-work-items
+// The Work Item's current area/iteration name, for the change check and the
+// activity payload (which records names, not ids — data-model.md § Log de actividad).
+async function catalogNameById(kind: CatalogKind, id: number | null): Promise<string | null> {
+  if (id === null) return null;
+  const table = kind === "area" ? areas : iterations;
+  const [row] = await db.select({ name: table.name }).from(table).where(eq(table.id, id)).limit(1);
+  return row?.name ?? null;
+}
+
+// FR-007/FR-008/FR-009/FR-012/FR-013 of 004-work-items, extended with the
+// fields of 008-work-item-fields (FR-001..FR-009, FR-020). `closedAt` is
+// deliberately not an input: only the closing transitions write it (FR-013).
 export async function updateWorkItem(input: {
   workItemId: number;
   title?: string;
   description?: string;
   stakeholder?: string;
   tagNames?: string[];
+  priority?: WorkItemLevel | null;
+  severity?: WorkItemLevel | null;
+  areaName?: string | null;
+  iterationName?: string | null;
+  startDate?: string | null;
+  targetDate?: string | null;
 }): Promise<Result<WorkItemWithDisplayId>> {
   return runAction(async () => {
     const { workItem, project } = await getWorkItemAndProject(input.workItemId);
@@ -209,8 +375,53 @@ export async function updateWorkItem(input: {
       changedFields.stakeholder = { from: workItem.stakeholder, to: parsed.data.stakeholder };
       updates.stakeholder = parsed.data.stakeholder || null;
     }
+    if (parsed.data.priority !== undefined && parsed.data.priority !== workItem.priority) {
+      changedFields.priority = { from: workItem.priority, to: parsed.data.priority };
+      updates.priority = parsed.data.priority;
+    }
+    if (parsed.data.severity !== undefined && parsed.data.severity !== workItem.severity) {
+      changedFields.severity = { from: workItem.severity, to: parsed.data.severity };
+      updates.severity = parsed.data.severity;
+    }
+
+    // FR-009: judged on the RESULTING pair, so changing only one date can't
+    // leave the target before the start. The DB CHECK backs this up.
+    const nextStartDate = parsed.data.startDate !== undefined ? parsed.data.startDate : workItem.startDate;
+    const nextTargetDate = parsed.data.targetDate !== undefined ? parsed.data.targetDate : workItem.targetDate;
+    if (nextStartDate && nextTargetDate && nextTargetDate < nextStartDate) {
+      throw new AppError("INVALID_DATE_RANGE", "The target date can't be before the start date.");
+    }
+    if (parsed.data.startDate !== undefined && parsed.data.startDate !== workItem.startDate) {
+      changedFields.startDate = { from: workItem.startDate, to: parsed.data.startDate };
+      updates.startDate = parsed.data.startDate;
+    }
+    if (parsed.data.targetDate !== undefined && parsed.data.targetDate !== workItem.targetDate) {
+      changedFields.targetDate = { from: workItem.targetDate, to: parsed.data.targetDate };
+      updates.targetDate = parsed.data.targetDate;
+    }
+
+    const catalogChanges: { kind: CatalogKind; name: string | null }[] = [];
+    for (const kind of ["area", "iteration"] as const) {
+      const requested = kind === "area" ? parsed.data.areaName : parsed.data.iterationName;
+      if (requested === undefined) continue;
+      const current = await catalogNameById(kind, kind === "area" ? workItem.areaId : workItem.iterationId);
+      // Same value in a different case ("FRONTEND" for "Frontend") is no change.
+      if ((current ?? "").toLowerCase() === (requested ?? "").toLowerCase()) continue;
+      catalogChanges.push({ kind, name: requested });
+      changedFields[kind] = { from: current, to: requested };
+    }
 
     const updated = await db.transaction(async (tx) => {
+      // FR-006/FR-021: names are resolved (reused case-insensitively or created)
+      // only within this Work Item's own project — never from a client-sent id.
+      for (const { kind, name } of catalogChanges) {
+        const value = name === null ? null : await resolveCatalogValue(tx, kind, project.id, name);
+        if (kind === "area") updates.areaId = value?.id ?? null;
+        else updates.iterationId = value?.id ?? null;
+        // Log the catalog's own spelling when an existing value was reused.
+        if (value) (changedFields[kind] as { to: unknown }).to = value.name;
+      }
+
       let current = workItem;
       if (Object.keys(updates).length > 0) {
         const [row] = await tx
