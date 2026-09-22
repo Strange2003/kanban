@@ -5,19 +5,22 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
 import { stages, workItems } from "@/db/schema";
-import { requireProjectMember } from "@/lib/permissions";
+import { requireProjectMember, requireProjectPermission } from "@/lib/permissions";
 import { generatePublicId } from "@/lib/ids";
 import { AppError, runAction, type Result } from "@/lib/errors";
 import type { WorkItemWithDisplayId } from "@/lib/actions/work-items";
+import type { ProjectRole } from "@/lib/roles";
 
 export type StageWithCount = typeof stages.$inferSelect & { workItemCount: number };
 
-// FR-001 of 003-kanban-board
+// FR-001 of 003-kanban-board. Also returns the caller's current role in the
+// project (FR-005 of 007-roles-permissions) so the page can render read-only
+// for a Viewer; reading the board itself only needs membership.
 export async function getBoard(
   projectPublicId: string,
-): Promise<Result<{ stages: StageWithCount[]; workItems: WorkItemWithDisplayId[] }>> {
+): Promise<Result<{ stages: StageWithCount[]; workItems: WorkItemWithDisplayId[]; role: ProjectRole }>> {
   return runAction(async () => {
-    const { project } = await requireProjectMember(projectPublicId);
+    const { project, membership } = await requireProjectMember(projectPublicId);
 
     const stageRows = await db
       .select({
@@ -42,6 +45,7 @@ export async function getBoard(
         ...wi,
         displayId: `${project.workItemPrefix}-${wi.displayNumber}`,
       })),
+      role: membership.role,
     };
   });
 }
@@ -57,7 +61,7 @@ export async function createStage(input: {
   name: string;
 }): Promise<Result<typeof stages.$inferSelect>> {
   return runAction(async () => {
-    const { project } = await requireProjectMember(input.projectPublicId);
+    const { project } = await requireProjectPermission(input.projectPublicId, "board:edit");
 
     const parsed = createStageSchema.safeParse({ name: input.name });
     if (!parsed.success) {
@@ -92,7 +96,7 @@ export async function reorderStages(input: {
   orderedStageIds: string[];
 }): Promise<Result<void>> {
   return runAction(async () => {
-    const { project } = await requireProjectMember(input.projectPublicId);
+    const { project } = await requireProjectPermission(input.projectPublicId, "board:edit");
 
     await db.transaction(async (tx) => {
       for (const [index, stagePublicId] of input.orderedStageIds.entries()) {
@@ -118,7 +122,7 @@ export async function renameStage(input: {
   name: string;
 }): Promise<Result<typeof stages.$inferSelect>> {
   return runAction(async () => {
-    const { project } = await requireProjectMember(input.projectPublicId);
+    const { project } = await requireProjectPermission(input.projectPublicId, "board:edit");
 
     const parsed = renameStageSchema.safeParse({ name: input.name });
     if (!parsed.success) {
@@ -140,7 +144,7 @@ export async function renameStage(input: {
 // FR-006/FR-007 of 003-kanban-board
 export async function deleteStage(input: { projectPublicId: string; stageId: string }): Promise<Result<void>> {
   return runAction(async () => {
-    const { project } = await requireProjectMember(input.projectPublicId);
+    const { project } = await requireProjectPermission(input.projectPublicId, "board:edit");
 
     const [stage] = await db
       .select()

@@ -1,13 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, desc, eq, ilike, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
 import { projects, projectMembers } from "@/db/schema";
 import { user } from "@/db/auth-schema";
 import { getSession } from "@/lib/auth";
-import { requireProjectMember, requireProjectOwner } from "@/lib/permissions";
+import { requireProjectMember, requireProjectPermission } from "@/lib/permissions";
+import { ASSIGNABLE_ROLES, type AssignableRole, type ProjectRole } from "@/lib/roles";
 import { generatePublicId, deriveWorkItemPrefix } from "@/lib/ids";
 import { AppError, runAction, type Result } from "@/lib/errors";
 
@@ -119,13 +120,13 @@ const renameProjectSchema = z.object({
   name: z.string().trim().min(1, "Project name is required."),
 });
 
-// FR-005/FR-008 of 002-project-spaces
+// FR-005/FR-008 of 002-project-spaces; owner-only per FR-014 of 007-roles-permissions.
 export async function renameProject(input: {
   projectPublicId: string;
   name: string;
 }): Promise<Result<typeof projects.$inferSelect>> {
   return runAction(async () => {
-    await requireProjectOwner(input.projectPublicId);
+    await requireProjectPermission(input.projectPublicId, "project:edit");
 
     const parsed = renameProjectSchema.safeParse({ name: input.name });
     if (!parsed.success) {
@@ -152,7 +153,7 @@ export async function updateProjectDescription(input: {
   description: string;
 }): Promise<Result<typeof projects.$inferSelect>> {
   return runAction(async () => {
-    await requireProjectOwner(input.projectPublicId);
+    await requireProjectPermission(input.projectPublicId, "project:edit");
 
     const [updated] = await db
       .update(projects)
@@ -170,7 +171,7 @@ export async function updateProjectDescription(input: {
 // invitations, stages, work_items, tags via onDelete: cascade (Principle IV).
 export async function deleteProject(projectPublicId: string): Promise<Result<void>> {
   return runAction(async () => {
-    const { project } = await requireProjectOwner(projectPublicId);
+    const { project } = await requireProjectPermission(projectPublicId, "project:delete");
 
     await db.delete(projects).where(eq(projects.id, project.id));
 
@@ -181,7 +182,7 @@ export async function deleteProject(projectPublicId: string): Promise<Result<voi
 // FR-012/FR-014/FR-015 of 002-project-spaces
 export async function removeMember(input: { projectPublicId: string; userId: string }): Promise<Result<void>> {
   return runAction(async () => {
-    const { project } = await requireProjectOwner(input.projectPublicId);
+    const { project } = await requireProjectPermission(input.projectPublicId, "member:remove");
 
     if (input.userId === project.ownerId) {
       throw new AppError("CANNOT_REMOVE_OWNER", "The project owner can't be removed.");
@@ -199,11 +200,19 @@ export async function removeMember(input: { projectPublicId: string; userId: str
 // FR-013/FR-014 of 002-project-spaces
 export async function leaveProject(projectPublicId: string): Promise<Result<void>> {
   return runAction(async () => {
-    const { session, project, membership } = await requireProjectMember(projectPublicId);
-
-    if (membership.role === "owner") {
-      throw new AppError("OWNER_CANNOT_LEAVE", "Transfer ownership or delete the project instead of leaving it.");
+    let context: Awaited<ReturnType<typeof requireProjectPermission>>;
+    try {
+      context = await requireProjectPermission(projectPublicId, "project:leave");
+    } catch (error) {
+      // The owner is the only role the matrix denies "project:leave" to. Keep
+      // the specific OWNER_CANNOT_LEAVE code (002, FR-014) rather than the
+      // generic ROLE_NOT_PERMITTED, because it says what to do instead.
+      if (error instanceof AppError && error.code === "ROLE_NOT_PERMITTED") {
+        throw new AppError("OWNER_CANNOT_LEAVE", "Transfer ownership or delete the project instead of leaving it.");
+      }
+      throw error;
     }
+    const { session, project } = context;
 
     await db
       .delete(projectMembers)
@@ -215,7 +224,7 @@ export async function leaveProject(projectPublicId: string): Promise<Result<void
 
 export type ProjectMemberWithUser = {
   userId: string;
-  role: "owner" | "member";
+  role: ProjectRole;
   name: string;
   email: string;
 };
@@ -238,5 +247,147 @@ export async function listProjectMembers(projectPublicId: string): Promise<Resul
       .orderBy(desc(sql`${projectMembers.role} = 'owner'`), user.name);
 
     return rows;
+  });
+}
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * First step of every operation that changes roles (changeMemberRole,
+ * transferOwnership): locks the project row so these operations run one at a
+ * time per project, then re-verifies — with the lock held — that the actor is
+ * still the owner. The permission check that ran before the transaction may be
+ * stale by now (e.g. a concurrent transfer just demoted them), and this is
+ * what makes that race fail cleanly instead of applying a role change on the
+ * strength of an ownership that no longer exists (SC-006; research.md §
+ * Invariante un solo owner y concurrencia).
+ */
+async function lockProjectAsOwner(tx: Tx, projectId: number, actorUserId: string) {
+  const [locked] = await tx.select().from(projects).where(eq(projects.id, projectId)).limit(1).for("update");
+  if (!locked) throw new AppError("NOT_FOUND", "Project not found.");
+
+  const [actor] = await tx
+    .select({ role: projectMembers.role })
+    .from(projectMembers)
+    .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, actorUserId)))
+    .limit(1);
+  if (!actor || actor.role !== "owner") {
+    throw new AppError("ROLE_NOT_PERMITTED", "Your role in this project changed — only the owner can do this.");
+  }
+
+  return locked;
+}
+
+const changeMemberRoleSchema = z.object({ role: z.enum(ASSIGNABLE_ROLES) });
+
+// FR-002/FR-006 of 007-roles-permissions. Member <-> Viewer only: `owner` is
+// never assignable here (it's only reachable through transferOwnership).
+export async function changeMemberRole(input: {
+  projectPublicId: string;
+  userId: string;
+  role: AssignableRole;
+}): Promise<Result<void>> {
+  return runAction(async () => {
+    const { session, project } = await requireProjectPermission(input.projectPublicId, "member:changeRole");
+
+    const parsed = changeMemberRoleSchema.safeParse({ role: input.role });
+    if (!parsed.success) {
+      throw new AppError("INVALID_ROLE", "Choose either Member or Viewer.");
+    }
+
+    await db.transaction(async (tx) => {
+      const locked = await lockProjectAsOwner(tx, project.id, session.user.id);
+
+      const [target] = await tx
+        .select({ role: projectMembers.role })
+        .from(projectMembers)
+        .where(and(eq(projectMembers.projectId, project.id), eq(projectMembers.userId, input.userId)))
+        .limit(1);
+      if (!target) throw new AppError("NOT_A_MEMBER", "That person is no longer a member of this project.");
+      if (target.role === "owner" || input.userId === locked.ownerId) {
+        throw new AppError(
+          "CANNOT_CHANGE_OWNER_ROLE",
+          "The owner's role can't be changed — transfer ownership to someone else instead.",
+        );
+      }
+
+      // Conditional UPDATE: 0 rows means the member vanished (or became the
+      // owner) since the read above, so reject instead of pretending it worked.
+      const updated = await tx
+        .update(projectMembers)
+        .set({ role: parsed.data.role })
+        .where(
+          and(
+            eq(projectMembers.projectId, project.id),
+            eq(projectMembers.userId, input.userId),
+            ne(projectMembers.role, "owner"),
+          ),
+        )
+        .returning({ userId: projectMembers.userId });
+      if (updated.length === 0) {
+        throw new AppError("NOT_A_MEMBER", "That person is no longer a member of this project.");
+      }
+    });
+
+    revalidatePath(`/projects/${input.projectPublicId}/settings`);
+  });
+}
+
+// FR-002/FR-011/FR-012/FR-013 of 007-roles-permissions. Immediate, with no
+// acceptance step (Clarifications 2026-09-18): the recipient becomes the owner
+// and the previous owner becomes a Member, in ONE transaction, so the project
+// is never left without an owner or with two.
+export async function transferOwnership(input: {
+  projectPublicId: string;
+  newOwnerUserId: string;
+}): Promise<Result<void>> {
+  return runAction(async () => {
+    const { session, project } = await requireProjectPermission(input.projectPublicId, "project:transferOwnership");
+
+    if (input.newOwnerUserId === session.user.id) {
+      throw new AppError("CANNOT_TRANSFER_TO_SELF", "You are already the owner of this project.");
+    }
+
+    await db.transaction(async (tx) => {
+      await lockProjectAsOwner(tx, project.id, session.user.id);
+
+      // Demote BEFORE promoting: project_members_one_owner_idx allows only one
+      // `owner` row per project, so promoting first would violate it midway.
+      const demoted = await tx
+        .update(projectMembers)
+        .set({ role: "member" })
+        .where(
+          and(
+            eq(projectMembers.projectId, project.id),
+            eq(projectMembers.userId, session.user.id),
+            eq(projectMembers.role, "owner"),
+          ),
+        )
+        .returning({ userId: projectMembers.userId });
+      if (demoted.length === 0) {
+        throw new AppError("ROLE_NOT_PERMITTED", "Your role in this project changed — only the owner can do this.");
+      }
+
+      // Any role can be promoted, a Viewer included (FR-011). 0 rows means the
+      // recipient left or was removed meanwhile: throwing rolls the demotion
+      // back too, so the original owner keeps the project (FR-012).
+      const promoted = await tx
+        .update(projectMembers)
+        .set({ role: "owner" })
+        .where(and(eq(projectMembers.projectId, project.id), eq(projectMembers.userId, input.newOwnerUserId)))
+        .returning({ userId: projectMembers.userId });
+      if (promoted.length === 0) {
+        throw new AppError("NOT_A_MEMBER", "That person is no longer a member of this project.");
+      }
+
+      // projects.owner_id must never disagree with the membership that has the owner role.
+      await tx
+        .update(projects)
+        .set({ ownerId: input.newOwnerUserId, updatedAt: new Date() })
+        .where(eq(projects.id, project.id));
+    });
+
+    revalidatePath(`/projects/${input.projectPublicId}/settings`);
+    revalidatePath("/");
   });
 }

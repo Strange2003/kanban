@@ -7,7 +7,8 @@ import { db } from "@/db/client";
 import { invitations, notifications, projectMembers, projects } from "@/db/schema";
 import { user } from "@/db/auth-schema";
 import { getSession } from "@/lib/auth";
-import { requireProjectMember, requireProjectOwner } from "@/lib/permissions";
+import { requireProjectPermission } from "@/lib/permissions";
+import { ASSIGNABLE_ROLES, can, type AssignableRole, type ProjectRole } from "@/lib/roles";
 import { generatePublicId } from "@/lib/ids";
 import { AppError, runAction, type Result } from "@/lib/errors";
 
@@ -41,19 +42,32 @@ const sendInvitationSchema = z.object({
   email: z.email("Enter a valid email address."),
 });
 
-// FR-005/FR-006/FR-007/FR-009/FR-012/FR-013/FR-017 of 001-accounts-invitations
+// `owner` is deliberately not part of this enum (FR-002 of 007-roles-permissions):
+// an invitation can only grant Member or Viewer.
+const invitationRoleSchema = z.enum(ASSIGNABLE_ROLES);
+
+// FR-005/FR-006/FR-007/FR-012/FR-013/FR-017 of 001-accounts-invitations, as
+// amended by FR-008/FR-009 of 007-roles-permissions: the Owner AND Members can
+// invite (Viewers can't), and whoever invites picks the role the invitee gets.
 export async function sendInvitation(input: {
   projectPublicId: string;
   email: string;
+  role: AssignableRole;
 }): Promise<Result<typeof invitations.$inferSelect>> {
   return runAction(async () => {
-    const { session, project } = await requireProjectOwner(input.projectPublicId);
+    const { session, project } = await requireProjectPermission(input.projectPublicId, "invitation:send");
 
     const parsed = sendInvitationSchema.safeParse({ email: input.email });
     if (!parsed.success) {
       throw new AppError("INVALID_EMAIL", parsed.error.issues[0]?.message ?? "Enter a valid email address.");
     }
     const email = parsed.data.email;
+
+    const parsedRole = invitationRoleSchema.safeParse(input.role);
+    if (!parsedRole.success) {
+      throw new AppError("INVALID_ROLE", "Choose either Member or Viewer for the invitation.");
+    }
+    const role = parsedRole.data;
 
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     const [recentCount] = await db
@@ -94,6 +108,7 @@ export async function sendInvitation(input: {
         projectId: project.id,
         invitedEmail: email,
         invitedByUserId: session.user.id,
+        role,
         status: "pending",
       })
       .returning();
@@ -141,7 +156,9 @@ export async function respondToInvitation(input: {
         await tx.insert(projectMembers).values({
           projectId: invitation.projectId,
           userId: session.user.id,
-          role: "member",
+          // The role chosen by whoever invited (FR-008 of 007); invitations from
+          // before that feature default to "member", so they behave as before.
+          role: invitation.role,
         });
       }
       await tx
@@ -163,13 +180,17 @@ export async function respondToInvitation(input: {
   });
 }
 
-// FR-011 of 001-accounts-invitations
+// FR-011 of 001-accounts-invitations, as amended by FR-010 of 007-roles-permissions:
+// the owner cancels any pending invitation; a Member only the ones they sent.
 export async function cancelInvitation(input: {
   projectPublicId: string;
   invitationId: string;
 }): Promise<Result<void>> {
   return runAction(async () => {
-    const { session, project, membership } = await requireProjectMember(input.projectPublicId);
+    const { session, project, membership } = await requireProjectPermission(
+      input.projectPublicId,
+      "invitation:cancelOwn",
+    );
 
     const [invitation] = await db
       .select()
@@ -177,8 +198,8 @@ export async function cancelInvitation(input: {
       .where(and(eq(invitations.publicId, input.invitationId), eq(invitations.projectId, project.id)))
       .limit(1);
     if (!invitation) throw new AppError("NOT_FOUND", "Invitation not found.");
-    if (invitation.invitedByUserId !== session.user.id && membership.role !== "owner") {
-      throw new AppError("FORBIDDEN", "Only the sender or the project owner can cancel this invitation.");
+    if (invitation.invitedByUserId !== session.user.id && !can(membership.role, "invitation:cancelAny")) {
+      throw new AppError("ROLE_NOT_PERMITTED", "Only the sender or the project owner can cancel this invitation.");
     }
     if (invitation.status !== "pending") {
       throw new AppError("INVITATION_NOT_PENDING", "This invitation has already been resolved.");
@@ -203,18 +224,26 @@ export async function cancelInvitation(input: {
 export type PendingInvitation = {
   publicId: string;
   invitedEmail: string;
+  // FR-008/FR-010 of 007-roles-permissions: the role the invitee will get, and
+  // who sent it (a Member can only cancel their own).
+  role: ProjectRole;
+  invitedByUserId: string;
   createdAt: Date;
 };
 
 // Supports the "Cancel" action on the settings page's pending-invitations list.
+// FR-018 of 007-roles-permissions: a Viewer gets ROLE_NOT_PERMITTED and no rows —
+// the list exposes third parties' emails they have no reason to see.
 export async function listPendingInvitations(projectPublicId: string): Promise<Result<PendingInvitation[]>> {
   return runAction(async () => {
-    const { project } = await requireProjectMember(projectPublicId);
+    const { project } = await requireProjectPermission(projectPublicId, "invitation:viewPending");
 
     return db
       .select({
         publicId: invitations.publicId,
         invitedEmail: invitations.invitedEmail,
+        role: invitations.role,
+        invitedByUserId: invitations.invitedByUserId,
         createdAt: invitations.createdAt,
       })
       .from(invitations)

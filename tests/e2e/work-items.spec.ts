@@ -1,5 +1,12 @@
 import { test, expect } from "@playwright/test";
-import { signUpNewUser, createProjectViaUi, dragWorkItemToColumn, dragWorkItemOntoWorkItem } from "./helpers";
+import {
+  signUpNewUser,
+  createProjectViaUi,
+  dragWorkItemToColumn,
+  dragWorkItemOntoWorkItem,
+  openCard,
+  backToBoard,
+} from "./helpers";
 
 // quickstart.md bloque 4.
 
@@ -23,7 +30,7 @@ test.describe("Work Items", () => {
     await page.getByPlaceholder("Title").fill("Design the login screen");
     await page.getByRole("button", { name: "Add", exact: true }).click();
 
-    await expect(page.getByText("Design the login screen")).toBeVisible();
+    await expect(page.locator('[data-testid="work-item-card"]', { hasText: "Design the login screen" })).toBeVisible();
     // FR-003 of 004-work-items: correlative per-project id, e.g. "TAB-1".
     await expect(page.getByText(/^[A-Z0-9]{1,4}-1$/)).toBeVisible();
   });
@@ -37,7 +44,7 @@ test.describe("Work Items", () => {
     await page.getByRole("button", { name: "+ Add work item" }).first().click();
     await page.getByPlaceholder("Title").fill("Design the login screen");
     await page.getByRole("button", { name: "Add", exact: true }).click();
-    await expect(page.getByText("Design the login screen")).toBeVisible();
+    await expect(page.locator('[data-testid="work-item-card"]', { hasText: "Design the login screen" })).toBeVisible();
 
     await dragWorkItemToColumn(page, "Design the login screen", "Doing");
 
@@ -59,25 +66,33 @@ test.describe("Work Items", () => {
     await page.getByRole("button", { name: "+ Add work item" }).click();
     await page.getByPlaceholder("Title").fill("Design the login screen");
     await page.getByRole("button", { name: "Add", exact: true }).click();
-    await page.getByText("Design the login screen").click();
+    await openCard(page, "Design the login screen");
 
-    await page.getByLabel("Description").fill("Match the new brand colors.");
-    await page.getByLabel("Stakeholder").fill("Product team");
+    await page.getByLabel("Description", { exact: true }).fill("Match the new brand colors.");
+    await page.getByLabel("Stakeholder", { exact: true }).fill("Product team");
     await page.getByPlaceholder("Add a tag...").fill("design");
     await page.getByRole("button", { name: 'Create "design"' }).click();
     await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
+    await page.waitForLoadState("networkidle");
 
-    // Tag is now in the project's catalog — reopen and add it to a second item too.
+    // Tag is now in the project's catalog — back to the board, add it to a second item too.
+    await backToBoard(page);
     await page.getByRole("button", { name: "+ Add work item" }).click();
     await page.getByPlaceholder("Title").fill("Another item");
     await page.getByRole("button", { name: "Add", exact: true }).click();
-    await page.getByText("Another item").click();
+    await openCard(page, "Another item");
     await page.getByPlaceholder("Add a tag...").fill("design");
     await page.getByRole("button", { name: "design", exact: true }).click();
     await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
+    await page.waitForLoadState("networkidle");
+    await backToBoard(page);
 
-    await page.getByText("Design the login screen").click();
-    await expect(page.getByLabel("Description")).toHaveValue("Match the new brand colors.");
+    await openCard(page, "Design the login screen");
+    await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Match the new brand colors.", {
+      timeout: 15000,
+    });
     await expect(page.getByText(/edited description/i)).toBeVisible();
     await expect(page.getByText(/edited tags/i)).toBeVisible();
   });
@@ -92,11 +107,12 @@ test.describe("Work Items", () => {
     await page.getByPlaceholder("Title").fill("Temporary item");
     await page.getByRole("button", { name: "Add", exact: true }).click();
 
-    await page.getByText("Temporary item").click();
-    await page.getByRole("button", { name: "Delete" }).click();
+    await openCard(page, "Temporary item");
+    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Confirm" })).toBeVisible();
     await page.getByRole("button", { name: "Confirm" }).click();
 
-    await expect(page.getByText("Temporary item")).toBeHidden();
+    await expect(page.locator('[data-testid="work-item-card"]', { hasText: "Temporary item" })).toBeHidden();
   });
 
   // Historia 5 de 004-work-items (T113).
@@ -109,7 +125,7 @@ test.describe("Work Items", () => {
       await page.getByRole("button", { name: "+ Add work item" }).click();
       await page.getByPlaceholder("Title").fill(title);
       await page.getByRole("button", { name: "Add", exact: true }).click();
-      await expect(page.getByText(title)).toBeVisible();
+      await expect(page.locator('[data-testid="work-item-card"]', { hasText: title })).toBeVisible();
     }
 
     const cards = page.locator('[data-testid="work-item-card"]');

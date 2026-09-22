@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireProjectMember } from "@/lib/permissions";
+import { ROLE_LABELS, can } from "@/lib/roles";
 import { listProjectMembers } from "@/lib/actions/projects";
 import { listPendingInvitations } from "@/lib/actions/accounts-invitations";
 import { RenameProjectForm } from "@/components/settings/RenameProjectForm";
@@ -9,9 +10,9 @@ import { PendingInvitationsList } from "@/components/settings/PendingInvitations
 import { DeleteProjectSection } from "@/components/settings/DeleteProjectSection";
 import { LeaveProjectButton } from "@/components/settings/LeaveProjectButton";
 
-// Any project member can view; individual controls gate themselves by role
-// (rename/description/delete/invite/remove are owner-only, per FR-008 of
-// 002-project-spaces and FR-009 of 001-accounts-invitations).
+// Any project member can view; each section shows itself according to the
+// permission matrix of 007-roles-permissions (lib/roles.ts). The Server Actions
+// behind every control enforce the same matrix — this page only reflects it.
 export default async function ProjectSettingsPage({
   params,
 }: {
@@ -19,12 +20,15 @@ export default async function ProjectSettingsPage({
 }) {
   const { projectPublicId } = await params;
   const { project, membership } = await requireProjectMember(projectPublicId);
-  const isOwner = membership.role === "owner";
+  const role = membership.role;
 
   const membersResult = await listProjectMembers(projectPublicId);
   const members = membersResult.ok ? membersResult.data : [];
 
-  const pendingInvitationsResult = isOwner ? await listPendingInvitations(projectPublicId) : null;
+  // FR-018 of 007: a Viewer never even requests this list (the action would
+  // reject them anyway) — pending invitations expose third parties' emails.
+  const canViewPending = can(role, "invitation:viewPending");
+  const pendingInvitationsResult = canViewPending ? await listPendingInvitations(projectPublicId) : null;
   const pendingInvitations = pendingInvitationsResult?.ok ? pendingInvitationsResult.data : [];
 
   return (
@@ -34,10 +38,10 @@ export default async function ProjectSettingsPage({
           ← Back to board
         </Link>
         <h1 className="text-2xl font-semibold">{project.name} — Settings</h1>
-        <p className="text-muted-foreground text-sm">Signed in as {membership.role}.</p>
+        <p className="text-muted-foreground text-sm">Signed in as {ROLE_LABELS[role]}.</p>
       </div>
 
-      {isOwner ? (
+      {can(role, "project:edit") ? (
         <>
           <RenameProjectForm projectPublicId={projectPublicId} initialName={project.name} />
           <ProjectDescriptionForm
@@ -49,15 +53,24 @@ export default async function ProjectSettingsPage({
         project.description && <p className="text-muted-foreground text-sm">{project.description}</p>
       )}
 
-      <MembersList projectPublicId={projectPublicId} members={members} isOwner={isOwner} />
+      <MembersList
+        projectPublicId={projectPublicId}
+        members={members}
+        role={role}
+        currentUserId={membership.userId}
+      />
 
-      {isOwner && <PendingInvitationsList projectPublicId={projectPublicId} invitations={pendingInvitations} />}
-
-      {isOwner ? (
-        <DeleteProjectSection projectPublicId={projectPublicId} />
-      ) : (
-        <LeaveProjectButton projectPublicId={projectPublicId} />
+      {canViewPending && (
+        <PendingInvitationsList
+          projectPublicId={projectPublicId}
+          invitations={pendingInvitations}
+          role={role}
+          currentUserId={membership.userId}
+        />
       )}
+
+      {can(role, "project:delete") && <DeleteProjectSection projectPublicId={projectPublicId} />}
+      {can(role, "project:leave") && <LeaveProjectButton projectPublicId={projectPublicId} />}
     </main>
   );
 }

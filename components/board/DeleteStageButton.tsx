@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { deleteStage } from "@/lib/actions/board";
 import { Button } from "@/components/ui/button";
+import { isRolePermissionError } from "@/lib/errors";
 
 // FR-006/FR-007 of 003-kanban-board
 export function DeleteStageButton({
@@ -28,6 +29,8 @@ export function DeleteStageButton({
 
     if (!result.ok) {
       setError(result.error.message);
+      // The role changed under an open screen (FR-004 of 007-roles-permissions).
+      if (isRolePermissionError(result)) router.refresh();
       return;
     }
     router.refresh();

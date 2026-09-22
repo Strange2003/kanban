@@ -3,9 +3,9 @@
 An open-source, self-hostable Kanban board for personal and team projects — accounts, unlimited collaborators per project, and a fast, drag-and-drop board. Free to run yourself, forever.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Status: Phase 1 complete](https://img.shields.io/badge/status-phase%201%20complete-brightgreen)](specs/)
+[![Status: Phase 2 complete](https://img.shields.io/badge/status-phase%202%20complete-brightgreen)](specs/)
 
-> **Project status**: **Phase 1 is fully implemented** — accounts, invitations, projects, the Kanban board, and Work Items are all working end-to-end against a real Postgres (Neon) database. See [Project Status](#project-status) for the exact task count and what's next.
+> **Project status**: **Phases 1 and 2 are implemented** — accounts, invitations, projects, the Kanban board, Work Items, their relationships, a dedicated detail view, and per-project roles (Owner / Member / Viewer) all work end-to-end against a real Postgres (Neon) database. See [Project Status](#project-status) for what's next.
 
 ## Why this project exists
 
@@ -18,6 +18,7 @@ Existing self-hostable alternatives (Kan.bn, Kaneo, Vikunja, Planka, WeKan, Kanb
 - **Accounts**: sign up with Google or email/password (with email verification and password recovery).
 - **Projects**: the top-level container. A project is automatically classified as **Personal** (1 member) or **Shared** (2+ members) — you never set this manually, it's derived from who's on the project.
 - **Unlimited collaborators**: invite anyone by email, no cap on project members, ever. That's a non-negotiable product principle, not a pricing tier.
+- **Roles**: every member is an **Owner** (exactly one per project — manages the project and its members, and can transfer ownership), a **Member** (edits everything and can invite) or a **Viewer** (read-only). Whoever invites picks the role; the owner can change it later.
 - **Board**: each project has one Kanban board. Columns and "stages" are the same thing — create/rename/delete/reorder columns freely, all via drag-and-drop.
 - **Work Items**: the cards on the board. Each gets a short, human-readable ID (e.g. `KAN-42`), a title, description, stakeholder, and tags from a per-project catalog.
 
@@ -108,7 +109,7 @@ This project follows **Spec-Driven Development**: every feature is specified, cl
 
 - ✅ **Project constitution** ratified ([`.specify/memory/constitution.md`](.specify/memory/constitution.md))
 - ✅ **Phase 1 (MVP core)** fully specified, planned, and **implemented** — 121/121 tasks done across [`specs/001-accounts-invitations`](specs/001-accounts-invitations/), including P1 (MVP), P2/P3 (invitations, project/board/Work Item management), and Polish (loading states, error boundary, accessibility, unit tests)
-- ⬜ **Phase 2** (Work Item relationships — parent/child and "related to" — plus roles & permissions, detail view depth) — not specified yet
+- ✅ **Phase 2 (depth)** — Work Item relationships ([`specs/005-work-item-relationships`](specs/005-work-item-relationships/)), the Work Item detail view ([`specs/006-work-item-detail-view`](specs/006-work-item-detail-view/)) and roles & permissions ([`specs/007-roles-permissions`](specs/007-roles-permissions/)) **implemented**
 - ⬜ **Phase 3** (list/table/calendar views, extended fields) — not specified yet, not yet confirmed in scope
 
 ## Roadmap
@@ -120,9 +121,9 @@ This project follows **Spec-Driven Development**: every feature is specified, cl
 4. Work Items
 
 **Phase 2 — Depth**
-5. Work Item relationships (parent/child, related)
-6. Work Item detail view
-7. Roles & permissions
+5. Work Item relationships (parent/child, related) ✅ *done*
+6. Work Item detail view ✅ *done*
+7. Roles & permissions ✅ *done*
 
 **Phase 3 — Candidates** *(not yet confirmed in scope)*
 8. Additional views (list, table, calendar)

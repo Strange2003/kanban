@@ -12,7 +12,7 @@ const { mockGetSession, mockSelect } = vi.hoisted(() => ({
 vi.mock("@/lib/auth", () => ({ getSession: mockGetSession }));
 vi.mock("@/db/client", () => ({ db: { select: mockSelect } }));
 
-import { requireProjectMember, requireProjectOwner } from "@/lib/permissions";
+import { requireProjectMember, requireProjectPermission } from "@/lib/permissions";
 
 function chain(result: unknown[]) {
   return { from: () => ({ where: () => ({ limit: () => Promise.resolve(result) }) }) };
@@ -55,27 +55,72 @@ describe("requireProjectMember", () => {
   });
 });
 
-describe("requireProjectOwner", () => {
+// FR-003/FR-004 of 007-roles-permissions.
+describe("requireProjectPermission", () => {
+  const session = { user: { id: "u1" } };
+  const project = { id: 1, publicId: "proj-1" };
+
   beforeEach(() => {
     mockGetSession.mockReset();
     mockSelect.mockReset();
   });
 
-  it("throws FORBIDDEN when the member isn't the owner", async () => {
-    mockGetSession.mockResolvedValue({ user: { id: "u1" } });
-    mockSelect
-      .mockReturnValueOnce(chain([{ id: 1, publicId: "proj-1" }]))
-      .mockReturnValueOnce(chain([{ role: "member" }]));
+  function asMember(role: string) {
+    mockGetSession.mockResolvedValue(session);
+    mockSelect.mockReturnValueOnce(chain([project])).mockReturnValueOnce(chain([{ projectId: 1, userId: "u1", role }]));
+  }
 
-    await expect(requireProjectOwner("proj-1")).rejects.toMatchObject({ code: "FORBIDDEN" });
+  it("throws UNAUTHENTICATED when there's no session", async () => {
+    mockGetSession.mockResolvedValue(null);
+
+    await expect(requireProjectPermission("proj-1", "workItem:edit")).rejects.toMatchObject({
+      code: "UNAUTHENTICATED",
+    });
   });
 
-  it("succeeds when the member is the owner", async () => {
-    mockGetSession.mockResolvedValue({ user: { id: "u1" } });
-    mockSelect
-      .mockReturnValueOnce(chain([{ id: 1, publicId: "proj-1" }]))
-      .mockReturnValueOnce(chain([{ role: "owner" }]));
+  it("throws NOT_FOUND when the project doesn't exist", async () => {
+    mockGetSession.mockResolvedValue(session);
+    mockSelect.mockReturnValueOnce(chain([]));
 
-    await expect(requireProjectOwner("proj-1")).resolves.toBeDefined();
+    await expect(requireProjectPermission("proj-1", "workItem:edit")).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("throws FORBIDDEN — not ROLE_NOT_PERMITTED — for someone who isn't a member", async () => {
+    mockGetSession.mockResolvedValue(session);
+    mockSelect.mockReturnValueOnce(chain([project])).mockReturnValueOnce(chain([]));
+
+    await expect(requireProjectPermission("proj-1", "workItem:edit")).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("throws ROLE_NOT_PERMITTED, naming the role, when a viewer attempts an edit", async () => {
+    asMember("viewer");
+
+    await expect(requireProjectPermission("proj-1", "workItem:edit")).rejects.toMatchObject({
+      code: "ROLE_NOT_PERMITTED",
+      message: expect.stringContaining("Viewer"),
+    });
+  });
+
+  it("throws ROLE_NOT_PERMITTED when a member attempts an owner-only action", async () => {
+    asMember("member");
+
+    await expect(requireProjectPermission("proj-1", "member:remove")).rejects.toMatchObject({
+      code: "ROLE_NOT_PERMITTED",
+    });
+  });
+
+  it("returns the session, project and membership when the role has the permission", async () => {
+    asMember("member");
+
+    const result = await requireProjectPermission("proj-1", "board:edit");
+    expect(result.session).toBe(session);
+    expect(result.project).toBe(project);
+    expect(result.membership).toMatchObject({ role: "member" });
+  });
+
+  it("lets the owner do owner-only actions", async () => {
+    asMember("owner");
+
+    await expect(requireProjectPermission("proj-1", "project:transferOwnership")).resolves.toBeDefined();
   });
 });

@@ -13,7 +13,7 @@
     "db:migrate": "dotenv -e .env.local -- tsx db/migrate.ts",
     "auth:generate": "dotenv -e .env.local -- npx @better-auth/cli generate --config lib/auth.ts --output db/auth-schema.ts -y",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "dotenv -e .env.local -- playwright test"
   },
   "keywords": [
     "kanban",

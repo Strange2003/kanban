@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createStage } from "@/lib/actions/board";
 import { Button } from "@/components/ui/button";
+import { isRolePermissionError } from "@/lib/errors";
 import { Input } from "@/components/ui/input";
 
 export function AddStageButton({ projectPublicId }: { projectPublicId: string }) {
@@ -22,6 +23,8 @@ export function AddStageButton({ projectPublicId }: { projectPublicId: string })
 
     if (!result.ok) {
       setError(result.error.message);
+      // The role changed under an open screen (FR-004 of 007-roles-permissions).
+      if (isRolePermissionError(result)) router.refresh();
       return;
     }
 

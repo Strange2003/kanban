@@ -15,6 +15,20 @@
       "when": 1789579138059,
       "tag": "0001_broad_impossible_man",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789616125721,
+      "tag": "0002_hesitant_preak",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789748678722,
+      "tag": "0003_skinny_guardsmen",
+      "breakpoints": true
     }
   ]
 }

@@ -1,24 +1,33 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import { reorderStages, type StageWithCount } from "@/lib/actions/board";
 import { moveWorkItem, reorderWorkItemsInStage, type WorkItemWithDisplayId } from "@/lib/actions/work-items";
 import { StageColumn } from "@/components/board/StageColumn";
+import { isRolePermissionError } from "@/lib/errors";
+import { can, type ProjectRole } from "@/lib/roles";
 import { AddStageButton } from "@/components/board/AddStageButton";
 import { useToast } from "@/components/ui/toast";
 
 export function Board({
   projectPublicId,
+  role,
   initialStages,
   initialWorkItems,
 }: {
   projectPublicId: string;
+  role: ProjectRole;
   initialStages: StageWithCount[];
   initialWorkItems: WorkItemWithDisplayId[];
 }) {
   const { toast } = useToast();
+  const router = useRouter();
+  // 007-roles-permissions: a Viewer sees the board but can't change it. The
+  // Server Actions enforce this too — this only removes the controls.
+  const canEdit = can(role, "board:edit");
   const [stagesState, setStagesState] = useState(initialStages);
   const [workItemsState, setWorkItemsState] = useState(initialWorkItems);
 
@@ -60,6 +69,8 @@ export function Board({
     if (!result.ok) {
       setStagesState(previous);
       toast(result.error.message, "destructive");
+      // Role changed under an open board: refresh so it flips to read-only (FR-004).
+      if (isRolePermissionError(result)) router.refresh();
     }
   }
 
@@ -81,6 +92,7 @@ export function Board({
     if (!result.ok) {
       setWorkItemsState(previous);
       toast(result.error.message, "destructive");
+      if (isRolePermissionError(result)) router.refresh();
     }
   }
 
@@ -106,12 +118,13 @@ export function Board({
     if (!result.ok) {
       setWorkItemsState(previous);
       toast(result.error.message, "destructive");
+      if (isRolePermissionError(result)) router.refresh();
     }
   }
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
-    if (!over) return;
+    if (!over || !canEdit) return;
 
     if (active.data.current?.type === "stage") {
       void handleStageReorder(String(active.id), String(over.id));
@@ -147,6 +160,7 @@ export function Board({
               <StageColumn
                 key={stage.id}
                 projectPublicId={projectPublicId}
+                canEdit={canEdit}
                 stage={stage}
                 workItems={workItemsState
                   .filter((wi) => wi.stageId === stage.id)
@@ -154,7 +168,7 @@ export function Board({
               />
             ))}
           </SortableContext>
-          <AddStageButton projectPublicId={projectPublicId} />
+          {canEdit && <AddStageButton projectPublicId={projectPublicId} />}
         </div>
       </div>
     </DndContext>

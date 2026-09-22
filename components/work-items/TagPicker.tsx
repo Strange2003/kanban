@@ -11,10 +11,14 @@ export function TagPicker({
   catalog,
   selected,
   onChange,
+  disabled = false,
 }: {
   catalog: string[];
   selected: string[];
   onChange: (tags: string[]) => void;
+  // Read-only mode (FR-005 of 007-roles-permissions): the tags are shown, but
+  // nothing can be added, removed or created.
+  disabled?: boolean;
 }) {
   const [draft, setDraft] = useState("");
 
@@ -45,15 +49,19 @@ export function TagPicker({
               className="flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground"
             >
               {name}
-              <button type="button" onClick={() => removeTag(name)} aria-label={`Remove ${name}`}>
-                <X className="h-3 w-3" />
-              </button>
+              {!disabled && (
+                <button type="button" onClick={() => removeTag(name)} aria-label={`Remove ${name}`}>
+                  <X className="h-3 w-3" />
+                </button>
+              )}
             </li>
           ))}
         </ul>
       )}
 
-      <div className="relative">
+      {disabled && selected.length === 0 && <p className="text-muted-foreground text-xs">No tags.</p>}
+
+      <div className={disabled ? "hidden" : "relative"}>
         <Input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}

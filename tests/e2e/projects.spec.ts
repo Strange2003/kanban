@@ -113,9 +113,10 @@ test.describe("Projects", () => {
     await expect(memberPage.getByRole("link", { name: "Team Project" })).toBeVisible();
 
     await ownerPage.reload();
-    await expect(ownerPage.getByText("Member (member)")).toBeVisible();
+    // 007-roles-permissions: the owner sees a role selector for each non-owner member.
+    await expect(ownerPage.getByLabel("Role of Member")).toBeVisible();
     await ownerPage.getByRole("button", { name: "Remove" }).click();
-    await expect(ownerPage.getByText("Member (member)")).toBeHidden();
+    await expect(ownerPage.getByLabel("Role of Member")).toBeHidden();
 
     // Access revoked immediately (FR-012).
     await memberPage.reload();

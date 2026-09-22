@@ -5,7 +5,7 @@ import { and, asc, desc, eq, gt, gte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
 import { workItems, stages, projects, workItemActivity, tags, workItemTags } from "@/db/schema";
-import { requireProjectMember } from "@/lib/permissions";
+import { requireProjectMember, requireProjectPermission } from "@/lib/permissions";
 import { AppError, runAction, type Result } from "@/lib/errors";
 
 export type WorkItemWithDisplayId = typeof workItems.$inferSelect & { displayId: string };
@@ -20,7 +20,8 @@ async function getStageAndProject(stagePublicId: string) {
   return { stage, project };
 }
 
-async function getWorkItemAndProject(workItemId: number) {
+// Exported for lib/actions/work-item-relationships.ts (005-work-item-relationships).
+export async function getWorkItemAndProject(workItemId: number) {
   const [workItem] = await db.select().from(workItems).where(eq(workItems.id, workItemId)).limit(1);
   if (!workItem) throw new AppError("NOT_FOUND", "Work item not found.");
 
@@ -28,6 +29,28 @@ async function getWorkItemAndProject(workItemId: number) {
   if (!project) throw new AppError("NOT_FOUND", "Project not found.");
 
   return { workItem, project };
+}
+
+// Resolves the URL segment of the dedicated detail view (FR-001/FR-010/FR-011
+// of 006-work-item-detail-view) — `displayNumber` is scoped by project, so a
+// project a caller isn't a member of never leaks whether a given number
+// exists there (requireProjectMember runs before the lookup).
+export async function getWorkItemByDisplayNumber(
+  projectPublicId: string,
+  displayNumber: number,
+): Promise<Result<WorkItemWithDisplayId>> {
+  return runAction(async () => {
+    const { project } = await requireProjectMember(projectPublicId);
+
+    const [workItem] = await db
+      .select()
+      .from(workItems)
+      .where(and(eq(workItems.projectId, project.id), eq(workItems.displayNumber, displayNumber)))
+      .limit(1);
+    if (!workItem) throw new AppError("NOT_FOUND", "Work item not found.");
+
+    return { ...workItem, displayId: `${project.workItemPrefix}-${workItem.displayNumber}` };
+  });
 }
 
 const createWorkItemSchema = z.object({
@@ -41,7 +64,7 @@ export async function createWorkItem(input: {
 }): Promise<Result<WorkItemWithDisplayId>> {
   return runAction(async () => {
     const { stage, project } = await getStageAndProject(input.stagePublicId);
-    await requireProjectMember(project.publicId);
+    await requireProjectPermission(project.publicId, "workItem:edit");
 
     const parsed = createWorkItemSchema.safeParse({ title: input.title });
     if (!parsed.success) {
@@ -96,7 +119,7 @@ export async function moveWorkItem(input: {
     const [project] = await db.select().from(projects).where(eq(projects.id, workItem.projectId)).limit(1);
     if (!project) throw new AppError("NOT_FOUND", "Project not found.");
 
-    await requireProjectMember(project.publicId);
+    await requireProjectPermission(project.publicId, "workItem:edit");
 
     const fromStageId = workItem.stageId;
 
@@ -142,7 +165,7 @@ export async function reorderWorkItemsInStage(input: {
     const [project] = await db.select().from(projects).where(eq(projects.id, stage.projectId)).limit(1);
     if (!project) throw new AppError("NOT_FOUND", "Project not found.");
 
-    await requireProjectMember(project.publicId);
+    await requireProjectPermission(project.publicId, "workItem:edit");
 
     await db.transaction(async (tx) => {
       for (const [index, workItemId] of input.orderedWorkItemIds.entries()) {
@@ -174,7 +197,7 @@ export async function updateWorkItem(input: {
 }): Promise<Result<WorkItemWithDisplayId>> {
   return runAction(async () => {
     const { workItem, project } = await getWorkItemAndProject(input.workItemId);
-    await requireProjectMember(project.publicId);
+    await requireProjectPermission(project.publicId, "workItem:edit");
 
     const parsed = updateWorkItemSchema.safeParse(input);
     if (!parsed.success) {
@@ -267,7 +290,7 @@ export async function listProjectTags(projectPublicId: string): Promise<Result<(
   });
 }
 
-// The tags currently applied to one Work Item, for WorkItemDetailPanel/TagPicker.
+// The tags currently applied to one Work Item, for WorkItemDetailView/TagPicker.
 export async function getWorkItemTags(workItemId: number): Promise<Result<(typeof tags.$inferSelect)[]>> {
   return runAction(async () => {
     const { project } = await getWorkItemAndProject(workItemId);
@@ -302,7 +325,7 @@ export async function listWorkItemActivity(
 export async function deleteWorkItem(workItemId: number): Promise<Result<void>> {
   return runAction(async () => {
     const { project } = await getWorkItemAndProject(workItemId);
-    await requireProjectMember(project.publicId);
+    await requireProjectPermission(project.publicId, "workItem:edit");
 
     await db.delete(workItems).where(eq(workItems.id, workItemId));
 

@@ -10,7 +10,7 @@ A self-hostable, open-source Kanban board (accounts, projects, boards, work item
 
 1. [`kanban-app-vision.md`](kanban-app-vision.md) — the original product vision/context doc. Read this for *why* the product is shaped the way it is.
 2. [`.specify/memory/constitution.md`](.specify/memory/constitution.md) — **non-negotiable** project principles (UX, unlimited collaboration, data hierarchy, data isolation/security, open-source/no lock-in, YAGNI) plus product-wide standards (auth requirements, the Work Item activity-log requirement, roles). Every plan and every code review is checked against this. If a principle needs to change, that happens via `/speckit-constitution`, never silently in code.
-3. [`specs/`](specs/) — one directory per feature, numbered (`001-accounts-invitations`, `002-project-spaces`, `003-kanban-board`, `004-work-items` so far). Each feature directory can contain:
+3. [`specs/`](specs/) — one directory per feature, numbered (`001-accounts-invitations` … `004-work-items` for Phase 1, then `005-work-item-relationships`, `006-work-item-detail-view`, `007-roles-permissions` for Phase 2). Each feature directory can contain:
    - `spec.md` — functional spec: user stories, functional requirements (`FR-###`), success criteria (`SC-###`), edge cases. **FR/SC numbers are only unique within their own spec.md** — always qualify them with the feature (e.g. "FR-008 of 004-work-items"), never cite a bare `FR-008` across files.
    - `checklists/requirements.md` — spec quality checklist.
    - `plan.md`, `research.md`, `data-model.md`, `contracts/`, `quickstart.md` — technical design. **Phase 1's four features share ONE set of these** (all real content lives in `specs/001-accounts-invitations/`; the `plan.md` in `002-004` are short stubs that point back to it). Check for a "stub" notice at the top of a `plan.md` before assuming it's the canonical one.
@@ -47,7 +47,9 @@ This repo uses the `/speckit-*` slash commands: `/speckit-specify` (new feature 
 
 ## Constitution highlights an agent is likely to violate by default
 
-- Any query touching `projects`, `stages`, `work_items`, or `tags` **must** check the requesting user's membership first (`lib/permissions.ts` helpers, once implemented) — never trust a client-supplied project ID alone.
+- Any query touching `projects`, `stages`, `work_items`, or `tags` **must** check the requesting user's membership first (`lib/permissions.ts` helpers) — never trust a client-supplied project ID alone.
+- Every Server Action that **mutates** project data **must** call `requireProjectPermission(projectPublicId, permission)` with a key from `lib/roles.ts` (`007-roles-permissions`) — never an inline `membership.role === ...` check, and never bare `requireProjectMember` on a mutation (that would let a Viewer write). The permission matrix lives **only** in `lib/roles.ts`, which is pure so client components can import `can()` to hide controls; the UI merely reflects a role, the server enforces it. A rejected role returns `ROLE_NOT_PERMITTED` (not `FORBIDDEN`, which pages turn into a 404). `tests/unit/action-permissions.test.ts` fails if an exported action isn't classified — add new actions there.
+- Everything exported from a `"use server"` file is a potential public endpoint. Don't export helpers from those files just so a sibling module can import them.
 - Every entity exposed in a URL or response needs a `publicId` (nanoid) distinct from its internal serial PK — except Work Items, which intentionally use a human-readable per-project correlative ID (`PREFIX-N`) instead; see `data-model.md` for why that's still compliant.
 - Every relevant change to a Work Item (stage change, field edit) must write a row to `work_item_activity` (see `data-model.md` and `contracts/work-items.md`) — this is a constitution requirement (Estándares de Producto y Datos § Auditoría), not optional polish. It was missed once already (see the `/speckit-analyze` history in `plan.md`'s Constitution Check table) — don't drop it again.
 - No feature that ties the product to a specific Git/CI-CD provider (Principle V) — this app has nothing to do with source control.
@@ -55,3 +57,13 @@ This repo uses the `/speckit-*` slash commands: `/speckit-specify` (new feature 
 ## Language note
 
 Spec artifacts under `specs/` and `.specify/memory/constitution.md` are written in **Spanish** (the product owner's working language for planning). Code, code comments, commit messages, and this file are in **English**. Don't translate the specs — read them as-is.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

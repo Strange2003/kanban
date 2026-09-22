@@ -9,6 +9,8 @@ import {
   uniqueIndex,
   index,
   pgEnum,
+  check,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -24,7 +26,9 @@ import { sql } from "drizzle-orm";
  * data-model.md.
  */
 
-export const projectRoleEnum = pgEnum("project_role", ["owner", "member"]);
+// 007-roles-permissions: `viewer` (read-only) joins `owner` and `member`. The
+// permission matrix per role lives in lib/roles.ts — not in the database.
+export const projectRoleEnum = pgEnum("project_role", ["owner", "member", "viewer"]);
 export const invitationStatusEnum = pgEnum("invitation_status", [
   "pending",
   "accepted",
@@ -62,6 +66,14 @@ export const projectMembers = pgTable(
     // The PK above only helps lookups keyed by projectId first — listMyProjects
     // filters by userId alone, which needs its own index at scale (SC-005 of 001).
     index("project_members_user_id_idx").on(table.userId),
+    // FR-002/SC-006 of 007-roles-permissions: a project can never have two
+    // owners, even if an action has a bug or two run concurrently. (The
+    // "at least one owner" half is kept by the actions — no action removes
+    // the owner role without granting it to another member in the same
+    // transaction.)
+    uniqueIndex("project_members_one_owner_idx")
+      .on(table.projectId)
+      .where(sql`${table.role} = 'owner'`),
   ],
 );
 
@@ -76,6 +88,10 @@ export const invitations = pgTable(
       .references(() => projects.id, { onDelete: "cascade" }),
     invitedEmail: text("invited_email").notNull(),
     invitedByUserId: text("invited_by_user_id").notNull(),
+    // FR-008 of 007-roles-permissions: the role the invitee gets on accepting.
+    // `DEFAULT 'member'` keeps invitations pending before this feature valid
+    // and behaving exactly as before (FR-015), with no backfill.
+    role: projectRoleEnum("role").notNull().default("member"),
     status: invitationStatusEnum("status").notNull().default("pending"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     respondedAt: timestamp("responded_at", { withTimezone: true }),
@@ -85,6 +101,9 @@ export const invitations = pgTable(
     uniqueIndex("invitations_pending_project_email_idx")
       .on(table.projectId, table.invitedEmail)
       .where(sql`${table.status} = 'pending'`),
+    // FR-002 of 007: an invitation never grants `owner` — that role is only
+    // reachable through an ownership transfer.
+    check("invitations_role_not_owner_check", sql`${table.role} <> 'owner'`),
   ],
 );
 
@@ -134,6 +153,12 @@ export const workItems = pgTable(
     description: text("description"),
     stakeholder: text("stakeholder"),
     position: integer("position").notNull(),
+    // 005-work-item-relationships data-model.md § Work Item — nullable
+    // self-FK; `onDelete: set null` is what makes deleting a parent leave
+    // its children as orphans (FR-012 of 005) without any application code.
+    parentWorkItemId: integer("parent_work_item_id").references((): AnyPgColumn => workItems.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -142,6 +167,31 @@ export const workItems = pgTable(
     // stages and Work Items would otherwise force a sequential scan.
     index("work_items_project_id_idx").on(table.projectId),
     index("work_items_stage_id_idx").on(table.stageId),
+    // Listing a Work Item's children (005-work-item-relationships) filters on this.
+    index("work_items_parent_work_item_id_idx").on(table.parentWorkItemId),
+  ],
+);
+
+// --- WorkItemRelatedLink (005-work-item-relationships data-model.md § WorkItemRelatedLink) ---
+export const workItemRelatedLinks = pgTable(
+  "work_item_related_links",
+  {
+    id: serial("id").primaryKey(),
+    // By convention always the smaller of the two ids (enforced by the
+    // Server Action, not the DB) so the pair (A, B) is the same row
+    // regardless of which order the user picked the two Work Items in.
+    workItemIdA: integer("work_item_id_a")
+      .notNull()
+      .references(() => workItems.id, { onDelete: "cascade" }),
+    workItemIdB: integer("work_item_id_b")
+      .notNull()
+      .references(() => workItems.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("work_item_related_links_pair_idx").on(table.workItemIdA, table.workItemIdB),
+    index("work_item_related_links_b_idx").on(table.workItemIdB),
+    check("work_item_related_links_distinct_check", sql`${table.workItemIdA} <> ${table.workItemIdB}`),
   ],
 );
 

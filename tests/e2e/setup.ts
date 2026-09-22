@@ -13,6 +13,7 @@ export default async function globalSetup() {
   await db.execute(sql`
     TRUNCATE TABLE
       work_item_activity,
+      work_item_related_links,
       work_item_tags,
       tags,
       work_items,

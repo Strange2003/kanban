@@ -3,6 +3,8 @@ import Link from "next/link";
 import { Settings } from "lucide-react";
 import { getBoard } from "@/lib/actions/board";
 import { Board } from "@/components/board/Board";
+import { ReadOnlyNotice } from "@/components/ui/read-only-notice";
+import { can } from "@/lib/roles";
 
 export default async function ProjectBoardPage({
   params,
@@ -19,7 +21,8 @@ export default async function ProjectBoardPage({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex justify-end border-b border-border px-4 py-2">
+      <div className="flex items-center justify-between border-b border-border px-4 py-2">
+        {can(result.data.role, "board:edit") ? <span /> : <ReadOnlyNotice role={result.data.role} />}
         <Link
           href={`/projects/${projectPublicId}/settings`}
           aria-label="Project settings"
@@ -30,6 +33,7 @@ export default async function ProjectBoardPage({
       </div>
       <Board
         projectPublicId={projectPublicId}
+        role={result.data.role}
         initialStages={result.data.stages}
         initialWorkItems={result.data.workItems}
       />

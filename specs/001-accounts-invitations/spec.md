@@ -200,6 +200,8 @@ flujo, la persona puede iniciar sesión con la nueva contraseña.
 - **FR-009**: El sistema MUST permitir que solo el owner/creador del proyecto envíe
   invitaciones en esta primera versión (la extensión de este permiso a otros roles
   se evalúa en la feature de Roles y Permisos).
+  *Enmendado por [007-roles-permissions](../007-roles-permissions/spec.md#functional-requirements)
+  (FR-009): Owner y Miembros invitan, y quien invita elige el rol de ingreso.*
 - **FR-010**: El sistema MUST permitir al invitado rechazar una invitación
   pendiente sin convertirse en miembro.
 - **FR-011**: El sistema MUST permitir a quien envió una invitación cancelarla
@@ -273,6 +275,8 @@ flujo, la persona puede iniciar sesión con la nueva contraseña.
 - En esta primera versión, solo el owner/creador del proyecto puede enviar
   invitaciones; abrir ese permiso a otros roles queda para la feature de Roles y
   Permisos (Fase 2), por lo que esta spec no modela roles adicionales.
+  *Superado por [007-roles-permissions](../007-roles-permissions/spec.md): ya existen
+  los roles Owner, Miembro y Lector, y los Miembros también pueden invitar.*
 - La notificación de invitación es exclusivamente dentro de la app; no existe
   envío de emails salientes como parte de esta feature (la recuperación de
   contraseña de FR-016 y la verificación de email de FR-015 sí envían email,

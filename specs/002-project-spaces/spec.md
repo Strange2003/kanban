@@ -273,5 +273,6 @@ de inmediato.
   [001-accounts-invitations](../001-accounts-invitations/spec.md); no los
   redefine aquí.
 - Transferir la propiedad (owner) de un proyecto a otro miembro queda fuera de
-  esta spec; en esta versión, un owner que ya no quiere gestionar el proyecto
+  esta spec (*ahora en alcance de [007-roles-permissions](../007-roles-permissions/spec.md),
+  FR-011 y FR-013*); en esta versión, un owner que ya no quiere gestionar el proyecto
   solo puede eliminarlo por completo, no transferirlo.
