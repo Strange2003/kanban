@@ -149,6 +149,10 @@ dentro de la misma columna y verificando que el nuevo orden persiste.
 - **FR-005**: El sistema MUST permitir a cualquier miembro mover un Work Item de
   una columna a otra mediante arrastre; el cambio de stage MUST reflejarse de
   inmediato.
+  *Ampliado por [008-work-item-fields](../008-work-item-fields/spec.md#functional-requirements)
+  (FR-013): mover un Work Item a una columna de cierre, o sacarlo de ella, lo
+  cierra o lo reabre. Además, reordenar dentro de una columna ya no cambia la
+  fecha de última modificación (008 research.md).*
 - **FR-006**: El sistema MUST permitir a cualquier miembro reordenar los Work
   Items dentro de una misma columna.
 - **FR-007**: El sistema MUST permitir a cualquier miembro editar el título, la

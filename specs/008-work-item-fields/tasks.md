@@ -75,14 +75,14 @@ las historias usan, y la corrección de aislamiento en `moveWorkItem`.
 **⚠️ CRITICAL**: ninguna historia de usuario puede empezar hasta completar
 esta fase.
 
-- [ ] T001 [P] Crear `lib/work-item-fields.ts` (módulo **puro**: sin imports de `db`, `next/*` ni `lib/auth`, para poder importarlo desde componentes cliente y desde `db/schema.ts`):
+- [X] T001 [P] Crear `lib/work-item-fields.ts` (módulo **puro**: sin imports de `db`, `next/*` ni `lib/auth`, para poder importarlo desde componentes cliente y desde `db/schema.ts`):
   - `export const WORK_ITEM_LEVELS = ["critical", "high", "medium", "low"] as const` (en ese orden, que es el orden de urgencia).
   - `export type WorkItemLevel`.
   - `export const LEVEL_LABELS: Record<WorkItemLevel, string>` con `Critical`, `High`, `Medium`, `Low`.
   - `export function isOverdue(targetDate: string | null, closedAt: Date | string | null, today: string): boolean`, que es `true` solo si `targetDate !== null && closedAt == null && targetDate < today`, comparando strings `"YYYY-MM-DD"`.
 
   Cubre FR-002, FR-003, FR-004 y FR-010 (contracts/work-item-fields.md § Módulo `lib/work-item-fields.ts`).
-- [ ] T002 [P] Crear `lib/work-item-closing.ts` (módulo **puro**) con `nextClosedAt({ fromIsClosing, toIsClosing, currentClosedAt, now })`, que devuelve `ClosingTransition` exactamente como en contracts/work-item-fields.md § Módulo `lib/work-item-closing.ts`. Implementa la tabla de research.md § Estado de cierre derivado:
+- [X] T002 [P] Crear `lib/work-item-closing.ts` (módulo **puro**) con `nextClosedAt({ fromIsClosing, toIsClosing, currentClosedAt, now })`, que devuelve `ClosingTransition` exactamente como en contracts/work-item-fields.md § Módulo `lib/work-item-closing.ts`. Implementa la tabla de research.md § Estado de cierre derivado:
   - `fromIsClosing === null` (creación) con destino de cierre → `{ closedAt: now, event: "closed" }`.
   - De no cierre a cierre → `closed` con `now`.
   - De cierre a no cierre → `{ closedAt: null, event: "reopened" }`.
@@ -90,15 +90,15 @@ esta fase.
   - De no cierre a no cierre (o creación en columna normal) → `{ closedAt: null, event: null }`.
 
   Cubre FR-012 y FR-013.
-- [ ] T003 [P] Tests unitarios de `isOverdue` en `tests/unit/work-item-fields.test.ts`:
+- [X] T003 [P] Tests unitarios de `isOverdue` en `tests/unit/work-item-fields.test.ts`:
   - `false` sin fecha objetivo.
   - `false` si la fecha objetivo es hoy (vence recién al día siguiente, Edge Cases).
   - `true` si es ayer y el Work Item está abierto.
   - `false` si es ayer pero `closedAt` no es `null`.
   - Acepta `closedAt` como `Date` y como string ISO.
   - `WORK_ITEM_LEVELS` está en el orden `critical, high, medium, low`.
-- [ ] T004 [P] Tests unitarios de `nextClosedAt` en `tests/unit/work-item-closing.test.ts`: una prueba por cada fila de la tabla de T002, incluida la que comprueba que moverse entre dos columnas de cierre conserva el `closedAt` original (no `now`) y no emite evento (Edge Cases, SC-006).
-- [ ] T005 Modificar `db/schema.ts` según data-model.md (depende de T001):
+- [X] T004 [P] Tests unitarios de `nextClosedAt` en `tests/unit/work-item-closing.test.ts`: una prueba por cada fila de la tabla de T002, incluida la que comprueba que moverse entre dos columnas de cierre conserva el `closedAt` original (no `now`) y no emite evento (Edge Cases, SC-006).
+- [X] T005 Modificar `db/schema.ts` según data-model.md (depende de T001):
   - `pgEnum("work_item_priority", WORK_ITEM_LEVELS)` y `pgEnum("work_item_severity", WORK_ITEM_LEVELS)`, importando `WORK_ITEM_LEVELS` de `@/lib/work-item-fields`.
   - Tablas `areas` e `iterations` con la misma forma que `tags`: `id serial PK`, `project_id integer NOT NULL` → `projects.id` `onDelete: "cascade"`, `name text NOT NULL`, e índices únicos `areas_project_lower_name_idx` / `iterations_project_lower_name_idx` sobre `(projectId, lower(name))`. **Declararlas antes de `workItems`**.
   - En `workItems`, todas nullable:
@@ -109,9 +109,9 @@ esta fase.
   - En `workItems`, `check("work_items_dates_order_check", sql\`${table.startDate} IS NULL OR ${table.targetDate} IS NULL OR ${table.targetDate} >= ${table.startDate}\`)`.
   - En `stages`, `isClosing: boolean("is_closing").notNull().default(false)`.
   - Comentarios que citen la spec como el resto del archivo. En particular, el de `closedAt` debe enunciar la invariante `closed_at IS NOT NULL ⇔ stages.is_closing` (data-model.md § Invariante de cierre).
-- [ ] T006 Generar la migración con `npm run db:generate` → `db/migrations/0004_<nombre>.sql` y su snapshot en `db/migrations/meta/`. Revisar que el SQL contenga **exactamente** lo que dice data-model.md § Migración: 2 `CREATE TYPE`, 2 `CREATE TABLE` con FK en cascada e índices `lower(name)`, 7 `ADD COLUMN` nullable en `work_items`, 2 FK `ON DELETE SET NULL`, el `CHECK` y `ADD COLUMN "is_closing" boolean DEFAULT false NOT NULL` en `stages`. No debe haber ningún `DROP` ni ninguna modificación de columnas existentes.
-- [ ] T007 Aplicar la migración a la Neon de desarrollo con `npm run db:migrate`. Correr la consulta de invariante de quickstart.md § 0 (`SELECT count(*) FROM work_items wi JOIN stages s ON s.id = wi.stage_id WHERE s.is_closing <> (wi.closed_at IS NOT NULL);`) y confirmar `0`. Antes, dejar al menos tres Work Items existentes en la base para el bloque 6 de quickstart.md.
-- [ ] T008 [P] Crear `lib/work-item-catalogs.ts` (solo servidor, **sin** `"use server"`, con el mismo comentario de advertencia que `lib/work-item-queries.ts`). Depende de T005. Tipos y funciones:
+- [X] T006 Generar la migración con `npm run db:generate` → `db/migrations/0004_<nombre>.sql` y su snapshot en `db/migrations/meta/`. Revisar que el SQL contenga **exactamente** lo que dice data-model.md § Migración: 2 `CREATE TYPE`, 2 `CREATE TABLE` con FK en cascada e índices `lower(name)`, 7 `ADD COLUMN` nullable en `work_items`, 2 FK `ON DELETE SET NULL`, el `CHECK` y `ADD COLUMN "is_closing" boolean DEFAULT false NOT NULL` en `stages`. No debe haber ningún `DROP` ni ninguna modificación de columnas existentes.
+- [X] T007 Aplicar la migración a la Neon de desarrollo con `npm run db:migrate`. Correr la consulta de invariante de quickstart.md § 0 (`SELECT count(*) FROM work_items wi JOIN stages s ON s.id = wi.stage_id WHERE s.is_closing <> (wi.closed_at IS NOT NULL);`) y confirmar `0`. Antes, dejar al menos tres Work Items existentes en la base para el bloque 6 de quickstart.md. — *Hecho 2026-09-22*: aplicada; la invariante dio `0`. Datos previos a la migración: 99 Work Items de corridas e2e anteriores, entre ellos el proyecto "Tablero Demo" (`xcg5h9biZ7pQkK`, 4 Work Items) del usuario de pruebas `test-1790115446409-44@example.com`, con la contraseña de `tests/e2e/helpers.ts`.
+- [X] T008 [P] Crear `lib/work-item-catalogs.ts` (solo servidor, **sin** `"use server"`, con el mismo comentario de advertencia que `lib/work-item-queries.ts`). Depende de T005. Tipos y funciones:
   - `type CatalogKind = "area" | "iteration"`.
   - `listCatalog(kind, projectId): Promise<string[]>`: nombres del catálogo del proyecto, en orden alfabético.
   - `resolveCatalogValue(tx, kind, projectId, name): Promise<{ id: number; name: string }>`:
@@ -120,13 +120,13 @@ esta fase.
     3. Si no existe, lo inserta con `onConflictDoNothing()` y relee, para cubrir la carrera con el índice único.
 
   Sin comprobaciones de sesión: quien lo llama ya verificó el acceso (contracts/work-item-fields.md § Módulo `lib/work-item-catalogs.ts`, FR-006, FR-021).
-- [ ] T009 [P] Crear `lib/dates.ts`:
+- [X] T009 [P] Crear `lib/dates.ts`:
   - `useLocalToday(): string | null` con `useSyncExternalStore`: suscripción vacía, snapshot de cliente con la fecha local `"YYYY-MM-DD"` y snapshot de servidor `null`.
   - `formatCalendarDate(date: "YYYY-MM-DD"): string`, que formatea **sin** convertir zona horaria: construye la fecha con componentes locales, no con `new Date("YYYY-MM-DD")`, que es UTC.
 
   Crear también `components/ui/local-date.tsx` con `<LocalDate value={Date | string} />`, que renderiza el día en la zona del navegador con `Intl.DateTimeFormat` usando el mismo mecanismo de `useSyncExternalStore` (servidor: la fecha UTC). Ver research.md § Fechas y "hoy" sin desajustes de hidratación.
-- [ ] T010 Corregir el aislamiento de `moveWorkItem` en `lib/actions/work-items.ts` (research.md § Hallazgo): después de `requireProjectPermission`, cargar la columna destino por `input.toStageId` y lanzar `AppError("NOT_FOUND", "Column not found.")` si no existe o si `stage.projectId !== workItem.projectId`. La comprobación va **antes** de la transacción, así que no se escribe nada.
-- [ ] T011 Test unitario en `tests/unit/work-items.test.ts`: `moveWorkItem` hacia una columna cuyo `projectId` difiere del del Work Item devuelve `{ ok: false, error: { code: "NOT_FOUND" } }` y no llama a `db.transaction`. Mismo patrón de mocks de `db.select` en cola que ya usa el archivo.
+- [X] T010 Corregir el aislamiento de `moveWorkItem` en `lib/actions/work-items.ts` (research.md § Hallazgo): después de `requireProjectPermission`, cargar la columna destino por `input.toStageId` y lanzar `AppError("NOT_FOUND", "Column not found.")` si no existe o si `stage.projectId !== workItem.projectId`. La comprobación va **antes** de la transacción, así que no se escribe nada.
+- [X] T011 Test unitario en `tests/unit/work-items.test.ts`: `moveWorkItem` hacia una columna cuyo `projectId` difiere del del Work Item devuelve `{ ok: false, error: { code: "NOT_FOUND" } }` y no llama a `db.transaction`. Mismo patrón de mocks de `db.select` en cola que ya usa el archivo.
 
 **Checkpoint**: esquema migrado con la invariante verificada, módulos
 puros probados y hueco de `moveWorkItem` cerrado. Las historias pueden
@@ -143,21 +143,21 @@ la prioridad se ve en la tarjeta y cada cambio queda en el historial.
 Severity Medium, recargar, ver "High" en la tarjeta (y la severidad no) y
 ver "Priority: None → High" en la actividad.
 
-- [ ] T012 [F8-US1] Extender `updateWorkItem` en `lib/actions/work-items.ts`:
+- [X] T012 [F8-US1] Extender `updateWorkItem` en `lib/actions/work-items.ts`:
   - Entrada: `priority?: WorkItemLevel | null` y `severity?: WorkItemLevel | null`.
   - Validación en `updateWorkItemSchema`: `z.enum(WORK_ITEM_LEVELS).nullable().optional()`. Un valor fuera del enum da `VALIDATION_ERROR`. `undefined` = no tocar, `null` = vaciar.
   - Solo si cambia, agregar `changedFields.priority` / `changedFields.severity` como `{ from, to }` (valor del enum o `null`) a `updates`. Así entran en el **mismo** evento `fields_edited` (data-model.md § Log de actividad, FR-020).
   - Permiso sin cambios: `workItem:edit` (FR-019).
-- [ ] T013 [P] [F8-US1] Tests unitarios en `tests/unit/work-items.test.ts` para `updateWorkItem`:
+- [X] T013 [P] [F8-US1] Tests unitarios en `tests/unit/work-items.test.ts` para `updateWorkItem`:
   - `priority: "urgent"` → `VALIDATION_ERROR` sin escrituras.
   - `priority: "high"` sobre un Work Item sin prioridad escribe `fields_edited` con `{ priority: { from: null, to: "high" } }`.
   - `priority: null` vacía el campo.
   - Enviar el mismo valor que ya tiene no escribe ningún evento.
-- [ ] T014 [P] [F8-US1] Crear `components/board/PriorityBadge.tsx`: indicador compacto con **texto** (`LEVEL_LABELS`) y color por nivel. Critical usa el tono destructivo y Low el tono apagado. Nunca solo color (accesibilidad, SC-002). Recibe `level: WorkItemLevel`.
-- [ ] T015 [F8-US1] Modificar `components/board/WorkItemCard.tsx`:
+- [X] T014 [P] [F8-US1] Crear `components/board/PriorityBadge.tsx`: indicador compacto con **texto** (`LEVEL_LABELS`) y color por nivel. Critical usa el tono destructivo y Low el tono apagado. Nunca solo color (accesibilidad, SC-002). Recibe `level: WorkItemLevel`.
+- [X] T015 [F8-US1] Modificar `components/board/WorkItemCard.tsx`:
   - Debajo del título, renderizar `<PriorityBadge>` si `workItem.priority !== null` (FR-016). La severidad **no** se muestra en la tarjeta.
   - Añadir la prioridad al `aria-label` de la tarjeta (p. ej. `"KAN-3: Title, priority High"`).
-- [ ] T016 [F8-US1] Modificar `components/work-items/WorkItemDetailView.tsx`:
+- [X] T016 [F8-US1] Modificar `components/work-items/WorkItemDetailView.tsx`:
   - Nueva sección "Planning" dentro del `<form>`, entre Tags y Relations.
   - Dos `<select>` (`aria-label` "Priority" / "Severity") con la opción `None` (valor vacío → `null`) más `WORK_ITEM_LEVELS` con `LEVEL_LABELS`, usando `selectClassName`.
   - Estado local inicializado desde `workItem.priority` / `workItem.severity` y reiniciado en el bloque `if (workItem.id !== prevWorkItemId)`.
@@ -165,13 +165,13 @@ ver "Priority: None → High" en la actividad.
   - `disabled={!canEdit}` para el Lector.
 
   Cubre FR-015 y FR-019.
-- [ ] T017 [F8-US1] Ampliar `describeActivity` en `components/work-items/WorkItemDetailView.tsx`:
+- [X] T017 [F8-US1] Ampliar `describeActivity` en `components/work-items/WorkItemDetailView.tsx`:
   - Para `fields_edited`, las claves nuevas se muestran con valor anterior y nuevo: `"<Label>: <from> → <to>"`, con `null` → `None` y los niveles con `LEVEL_LABELS`, a través de un mapa `FIELD_LABELS` (`priority` → `Priority`, `severity` → `Severity`, más las claves de US2 y US4 cuando lleguen).
   - Las claves existentes (`title`, `description`, `stakeholder`, `tags`) conservan el formato actual `"Edited …"`.
   - Si un evento mezcla claves nuevas y existentes, se une en una sola línea separada por `; `.
 
   Cubre FR-020.
-- [ ] T018 [F8-US1] Crear `tests/e2e/work-item-fields.spec.ts` con el escenario de quickstart.md bloque 1, reutilizando los helpers de `tests/e2e/helpers.ts`:
+- [X] T018 [F8-US1] Crear `tests/e2e/work-item-fields.spec.ts` con el escenario de quickstart.md bloque 1, reutilizando los helpers de `tests/e2e/helpers.ts`:
   1. Crear proyecto, columna y Work Item.
   2. Asignar High/Medium y guardar.
   3. Recargar y comprobar que persisten.
@@ -194,26 +194,26 @@ tarjeta y se marca como vencida según la fecha local de quien mira.
 una fecha objetivo de ayer se marca como vencida en la tarjeta y en el
 detalle, y reordenar no cambia Last modified.
 
-- [ ] T019 [F8-US2] Extender `updateWorkItem` en `lib/actions/work-items.ts`:
+- [X] T019 [F8-US2] Extender `updateWorkItem` en `lib/actions/work-items.ts`:
   - Entrada: `startDate?: string | null` y `targetDate?: string | null`. Validación con `z.iso.date().nullable().optional()`; un formato inválido da `VALIDATION_ERROR`.
   - Calcular los valores **resultantes**: el nuevo si llega (`!== undefined`), o el guardado en `workItem` si no. Si ambos existen y `target < start`, lanzar `AppError("INVALID_DATE_RANGE", "The target date can't be before the start date.")` antes de la transacción (FR-009, contracts § `updateWorkItem`).
   - Registrar `changedFields.startDate` / `changedFields.targetDate` con strings `"YYYY-MM-DD"` o `null`.
   - `closedAt` **no** es aceptado como entrada (FR-013).
-- [ ] T020 [P] [F8-US2] Tests unitarios en `tests/unit/work-items.test.ts`:
+- [X] T020 [P] [F8-US2] Tests unitarios en `tests/unit/work-items.test.ts`:
   - `targetDate` anterior al `startDate` guardado → `INVALID_DATE_RANGE` sin escrituras.
   - `startDate` posterior al `targetDate` guardado (solo se cambia el inicio) → `INVALID_DATE_RANGE`.
   - Solo `targetDate` sin inicio es válido.
   - `targetDate: "2026-13-40"` → `VALIDATION_ERROR`.
   - El evento `fields_edited` guarda `{ targetDate: { from: null, to: "2026-10-15" } }`.
-- [ ] T021 [F8-US2] Modificar `reorderWorkItemsInStage` en `lib/actions/work-items.ts` para que el `.set(...)` solo escriba `position` y ya no `updatedAt`. Agregar un comentario que cite research.md § `updated_at` deja de cambiar al reordenar.
-- [ ] T022 [P] [F8-US2] Crear `components/board/TargetDateChip.tsx`:
+- [X] T021 [F8-US2] Modificar `reorderWorkItemsInStage` en `lib/actions/work-items.ts` para que el `.set(...)` solo escriba `position` y ya no `updatedAt`. Agregar un comentario que cite research.md § `updated_at` deja de cambiar al reordenar.
+- [X] T022 [P] [F8-US2] Crear `components/board/TargetDateChip.tsx`:
   - Props: `targetDate: string` y `closedAt: Date | string | null`.
   - Muestra `formatCalendarDate(targetDate)` con un ícono de calendario de `lucide-react`.
   - Obtiene `today` de `useLocalToday()`. Si `today !== null && isOverdue(targetDate, closedAt, today)`, aplica el estilo destructivo y el texto accesible "Overdue" (visible o `sr-only`). Mientras `today` sea `null` (SSR o hidratación), se renderiza sin marca de vencido.
 
   Cubre FR-010, FR-016 y research.md § Fechas y "hoy".
-- [ ] T023 [F8-US2] Modificar `components/board/WorkItemCard.tsx`: renderizar `<TargetDateChip>` junto a `<PriorityBadge>` si `workItem.targetDate !== null` y añadir "overdue" al `aria-label` cuando corresponda. Usar `useLocalToday()` en la tarjeta para el `aria-label`, con la misma condición `today !== null`.
-- [ ] T024 [F8-US2] Modificar `components/work-items/WorkItemDetailView.tsx`:
+- [X] T023 [F8-US2] Modificar `components/board/WorkItemCard.tsx`: renderizar `<TargetDateChip>` junto a `<PriorityBadge>` si `workItem.targetDate !== null` y añadir "overdue" al `aria-label` cuando corresponda. Usar `useLocalToday()` en la tarjeta para el `aria-label`, con la misma condición `today !== null`.
+- [X] T024 [F8-US2] Modificar `components/work-items/WorkItemDetailView.tsx`:
   - En "Planning", dos `<input type="date">` con `<Label>` (`Start date`, `Target date`):
     - Estado local inicializado desde `workItem.startDate` / `workItem.targetDate` (`""` si `null`) y reiniciado con el cambio de Work Item.
     - Enviados en `handleSave` (`""` → `null`).
@@ -222,8 +222,8 @@ detalle, y reordenar no cambia Last modified.
   - Nueva sección "Dates" de solo lectura, fuera de los controles editables: `Created` y `Last modified` con `<LocalDate value={workItem.createdAt} />` y `<LocalDate value={workItem.updatedAt} />`.
 
   Cubre FR-008 y FR-015.
-- [ ] T025 [F8-US2] Ampliar `FIELD_LABELS` y el formateo de `describeActivity` en `components/work-items/WorkItemDetailView.tsx`: `startDate` → `Start date` y `targetDate` → `Target date`, con los valores formateados por `formatCalendarDate` y `null` → `None` (FR-020).
-- [ ] T026 [F8-US2] Agregar a `tests/e2e/work-item-fields.spec.ts` el escenario de quickstart.md bloque 2:
+- [X] T025 [F8-US2] Ampliar `FIELD_LABELS` y el formateo de `describeActivity` en `components/work-items/WorkItemDetailView.tsx`: `startDate` → `Start date` y `targetDate` → `Target date`, con los valores formateados por `formatCalendarDate` y `null` → `None` (FR-020).
+- [X] T026 [F8-US2] Agregar a `tests/e2e/work-item-fields.spec.ts` el escenario de quickstart.md bloque 2:
   1. Rango inválido rechazado con mensaje visible.
   2. Target date = ayer, calculada en el test con la fecha local del navegador de Playwright.
   3. La tarjeta tiene la marca "Overdue", y el detalle también.
@@ -249,7 +249,7 @@ cada transición se audita.
 - Marcar y desmarcar una columna con Work Items.
 - La consulta de invariante devuelve 0.
 
-- [ ] T027 [F8-US3] Refactorizar el movimiento en `lib/actions/work-items.ts`:
+- [X] T027 [F8-US3] Refactorizar el movimiento en `lib/actions/work-items.ts`:
   - Extraer el cuerpo transaccional de `moveWorkItem` a una función **no exportada** `moveWithinTx(tx, { workItem, fromStage, toStage, toPosition, via, now })`, que hace:
     1. Cierra el hueco en el origen y abre el lugar en el destino.
     2. Actualiza `stageId`, `position`, `closedAt` (de `nextClosedAt`) y `updatedAt`.
@@ -258,8 +258,8 @@ cada transición se audita.
   - `moveWorkItem`, dentro de la transacción, relee las filas de las columnas de origen y destino con `.for("share")` (research.md § Concurrencia) y llama a `moveWithinTx` con `via: "move"`.
   - Conserva la comprobación de proyecto de T010.
   - **No exportar** `moveWithinTx`: todo export de este archivo es un endpoint público (AGENTS.md).
-- [ ] T028 [F8-US3] Modificar `createWorkItem` en `lib/actions/work-items.ts`: dentro de la transacción, releer la columna con `.for("share")`. Si `stage.isClosing`, insertar el Work Item con `closedAt = now` e insertar el evento `closed` `{ closedAt, stageName: stage.name, via: "created" }` (Edge Cases, FR-013).
-- [ ] T029 [F8-US3] Agregar `closeWorkItem(workItemId: number): Promise<Result<void>>` en `lib/actions/work-items.ts`, según contracts/work-item-fields.md § `closeWorkItem`:
+- [X] T028 [F8-US3] Modificar `createWorkItem` en `lib/actions/work-items.ts`: dentro de la transacción, releer la columna con `.for("share")`. Si `stage.isClosing`, insertar el Work Item con `closedAt = now` e insertar el evento `closed` `{ closedAt, stageName: stage.name, via: "created" }` (Edge Cases, FR-013).
+- [X] T029 [F8-US3] Agregar `closeWorkItem(workItemId: number): Promise<Result<void>>` en `lib/actions/work-items.ts`, según contracts/work-item-fields.md § `closeWorkItem`:
   1. `getWorkItemAndProject` y luego `requireProjectPermission(project.publicId, "workItem:edit")`.
   2. En una transacción, leer la columna actual y la primera columna con `isClosing = true` del proyecto (`orderBy(asc(stages.position)).limit(1)`), ambas `.for("share")`.
   3. Si no hay columna de cierre → `AppError("NO_CLOSING_STAGE", "Mark a column as a closing column first.")`. Si la columna actual ya es de cierre → `AppError("ALREADY_CLOSED", "This Work Item is already closed.")`.
@@ -267,7 +267,7 @@ cada transición se audita.
   5. `revalidatePath` del tablero.
 
   Cubre FR-014 y FR-019.
-- [ ] T030 [F8-US3] Agregar `setStageClosing({ projectPublicId, stagePublicId, isClosing }): Promise<Result<void>>` en `lib/actions/board.ts`, según contracts § `setStageClosing`:
+- [X] T030 [F8-US3] Agregar `setStageClosing({ projectPublicId, stagePublicId, isClosing }): Promise<Result<void>>` en `lib/actions/board.ts`, según contracts § `setStageClosing`:
   1. `requireProjectPermission(projectPublicId, "board:edit")`.
   2. En una transacción, leer la columna por `publicId` + `projectId` con `.for("update")`. Si no existe → `NOT_FOUND`. Si ya tiene ese valor → return sin escribir nada (idempotente).
   3. Actualizar `stages.isClosing`.
@@ -276,32 +276,32 @@ cada transición se audita.
   6. `revalidatePath`.
 
   Cubre FR-011, FR-013 y FR-020.
-- [ ] T031 [F8-US3] Modificar `getWorkItemDetailData` en `lib/actions/work-item-relationships.ts` para que devuelva además:
+- [X] T031 [F8-US3] Modificar `getWorkItemDetailData` en `lib/actions/work-item-relationships.ts` para que devuelva además:
   - `stage: { name, isClosing }`: la columna actual del Work Item.
   - `hasClosingStage: boolean`: si el proyecto tiene alguna columna de cierre.
 
   Ambos se leen dentro del mismo `Promise.all`, después de la verificación de membresía existente, sin exportar helpers nuevos (contracts § `getWorkItemDetailData`). Actualizar el tipo `WorkItemDetailData`.
-- [ ] T032 [F8-US3] Modificar `tests/unit/action-permissions.test.ts`:
+- [X] T032 [F8-US3] Modificar `tests/unit/action-permissions.test.ts`:
   - Agregar a `CASES` `closeWorkItem` (`workItem:edit`, `run: () => closeWorkItem(1)`, `denied: READ_ONLY_DENIED`, `allowed: EDITORS`) y `setStageClosing` (`board:edit`, `run: () => setStageClosing({ projectPublicId: P, stagePublicId: "stage-1", isClosing: true })`, `denied: READ_ONLY_DENIED`, `allowed: EDITORS`).
   - Importarlas.
   - Asegurar que la fila mock de `stages` incluye `isClosing: false`.
   - Confirmar que el test de completitud pasa (SC-005).
-- [ ] T033 [F8-US3] Tests unitarios en `tests/unit/work-items.test.ts`:
+- [X] T033 [F8-US3] Tests unitarios en `tests/unit/work-items.test.ts`:
   - `closeWorkItem` sin columnas de cierre → `NO_CLOSING_STAGE`.
   - `closeWorkItem` sobre un Work Item cuya columna ya es de cierre → `ALREADY_CLOSED`.
   - En ambos casos no hay escrituras fuera de la transacción.
 
   Añadir en un archivo nuevo `tests/unit/board.test.ts`: `setStageClosing` con el mismo valor ya guardado no escribe nada, y con una columna de otro proyecto devuelve `NOT_FOUND`. Mismo patrón de mocks que `work-items.test.ts`.
-- [ ] T034 [P] [F8-US3] Crear `components/board/ClosingStageToggle.tsx`:
+- [X] T034 [P] [F8-US3] Crear `components/board/ClosingStageToggle.tsx`:
   - Botón pequeño con un ícono de `lucide-react` (p. ej. `CircleCheck`).
   - `aria-pressed={isClosing}` y `aria-label` "Mark as closing column" / "Unmark closing column".
   - Recibe `isClosing` y `onToggle()`.
   - Evita iniciar el drag de la cabecera de la columna, con el mismo criterio que `DeleteStageButton`.
-- [ ] T035 [F8-US3] Modificar `components/board/StageColumn.tsx`:
+- [X] T035 [F8-US3] Modificar `components/board/StageColumn.tsx`:
   - Indicador visible de columna de cierre en la cabecera para **todos** los roles cuando `stage.isClosing`: ícono + texto `Closing` con `title` explicativo (FR-011).
   - Con `canEdit`, renderizar `<ClosingStageToggle>` junto a `DeleteStageButton`.
   - Nueva prop `onToggleClosing(stage)` que viene de `Board`.
-- [ ] T036 [F8-US3] Modificar `components/board/Board.tsx`:
+- [X] T036 [F8-US3] Modificar `components/board/Board.tsx`:
   - En `handleWorkItemMove`, calcular `closedAt` de forma optimista con `nextClosedAt`, usando el `isClosing` de las columnas de origen y destino en `stagesState`. Así la marca de vencido cambia al instante (Principio I).
   - Nuevo `handleToggleClosing(stage)`:
     1. Actualiza de forma optimista `stagesState` (`isClosing`) y `workItemsState`: `closedAt` = `new Date()` o `null` para los Work Items de esa columna.
@@ -309,7 +309,7 @@ cada transición se audita.
     3. Si falla, revierte ambos estados, muestra un toast y hace `router.refresh()` ante `isRolePermissionError`.
     4. Si sale bien, hace `router.refresh()` para traer los `closedAt` del servidor.
   - Pasar `onToggleClosing` a `StageColumn`.
-- [ ] T037 [F8-US3] Modificar `components/work-items/WorkItemDetailView.tsx`:
+- [X] T037 [F8-US3] Modificar `components/work-items/WorkItemDetailView.tsx`:
   - En la sección "Dates", `Status`: `Open`, o `Closed on <LocalDate value={workItem.closedAt}/> · <stage.name>` si `initialDetail.stage.isClosing` (FR-014).
   - Botón `Close` con `type="button"` (fuera del submit):
     - Visible solo para `canEdit` y si el Work Item está abierto.
@@ -322,7 +322,7 @@ cada transición se audita.
     - `reopened` → `"Reopened (moved to <stageName>)"` o `"Reopened: column <stageName> unmarked as closing"`.
 
   Cubre FR-020.
-- [ ] T038 [F8-US3] Agregar a `tests/e2e/work-item-fields.spec.ts` el escenario de quickstart.md bloque 3, pasos 1 a 6 y 8:
+- [X] T038 [F8-US3] Agregar a `tests/e2e/work-item-fields.spec.ts` el escenario de quickstart.md bloque 3, pasos 1 a 6 y 8:
   1. `Close` deshabilitado sin columnas de cierre.
   2. Marcar "Done" (el indicador aparece).
   3. Arrastrar un Work Item vencido a "Done": desaparece "Overdue" y el detalle dice "Closed on".
@@ -351,32 +351,32 @@ que se amplían en línea y separados entre sí y entre proyectos.
 - Una iteración no aparece como área.
 - Otro proyecto no ve "Frontend".
 
-- [ ] T039 [F8-US4] Extender `updateWorkItem` en `lib/actions/work-items.ts`:
+- [X] T039 [F8-US4] Extender `updateWorkItem` en `lib/actions/work-items.ts`:
   - Entrada: `areaName?: string | null` y `iterationName?: string | null`. Una cadena vacía o solo espacios se trata como `null`.
   - Dentro de la transacción, resolver cada nombre con `resolveCatalogValue(tx, "area" | "iteration", project.id, name)` de `@/lib/work-item-catalogs`. Siempre con el `project.id` del Work Item, nunca con un id enviado por el cliente (FR-021).
   - Comparar con el nombre actual, que se obtiene leyendo el valor por `workItem.areaId` / `workItem.iterationId`. Si cambió, actualizar `areaId` / `iterationId` y registrar `changedFields.area` / `changedFields.iteration` con **nombres** `{ from, to }` (`null` si vacío).
 
   Cubre FR-005, FR-006 y data-model.md § Log de actividad.
-- [ ] T040 [F8-US4] Modificar `getWorkItemDetailData` en `lib/actions/work-item-relationships.ts` para que devuelva además `catalogAreas` y `catalogIterations` (con `listCatalog(…, project.id)`), `itemArea` e `itemIteration` (nombres o `null`), dentro del mismo `Promise.all` y después de la verificación de membresía. Actualizar el tipo `WorkItemDetailData`.
-- [ ] T041 [P] [F8-US4] Tests unitarios en `tests/unit/work-items.test.ts`:
+- [X] T040 [F8-US4] Modificar `getWorkItemDetailData` en `lib/actions/work-item-relationships.ts` para que devuelva además `catalogAreas` y `catalogIterations` (con `listCatalog(…, project.id)`), `itemArea` e `itemIteration` (nombres o `null`), dentro del mismo `Promise.all` y después de la verificación de membresía. Actualizar el tipo `WorkItemDetailData`.
+- [X] T041 [P] [F8-US4] Tests unitarios en `tests/unit/work-items.test.ts`:
   - `areaName: "  "` se trata como vaciar el área.
   - `areaName: "FRONTEND"` con "Frontend" ya en el catálogo del proyecto reutiliza su id sin insertar (se verifica el mock de `insert`).
   - La resolución filtra por el `projectId` del Work Item.
   - El evento guarda nombres, no ids.
-- [ ] T042 [P] [F8-US4] Crear `components/work-items/CatalogPicker.tsx`: selector de **un** valor, análogo a `TagPicker.tsx`.
+- [X] T042 [P] [F8-US4] Crear `components/work-items/CatalogPicker.tsx`: selector de **un** valor, análogo a `TagPicker.tsx`.
   - Props: `catalog: string[]`, `value: string | null`, `onChange(value: string | null)`, `label: string` (accesible), `disabled?: boolean`.
   - Muestra el valor actual con un botón para quitarlo.
   - Tiene un `Input` con sugerencias del catálogo filtradas sin distinguir mayúsculas y la opción `Create "<nombre>"` si el nombre no existe.
   - Si el texto coincide sin distinguir mayúsculas con un valor del catálogo, elige ese valor con su capitalización original.
   - En modo `disabled` solo muestra el valor o "None".
-- [ ] T043 [F8-US4] Modificar `components/work-items/WorkItemDetailView.tsx`:
+- [X] T043 [F8-US4] Modificar `components/work-items/WorkItemDetailView.tsx`:
   - En "Planning", dos `<CatalogPicker>` (`Area`, `Iteration`) con `initialDetail.catalogAreas` / `catalogIterations` y estado inicializado desde `itemArea` / `itemIteration`, reiniciado con el cambio de Work Item.
   - Enviar `areaName` / `iterationName` en `handleSave`.
   - `disabled={!canEdit}`.
   - Ampliar `FIELD_LABELS` con `area` → `Area` e `iteration` → `Iteration`.
 
   Cubre FR-015 y FR-020.
-- [ ] T044 [F8-US4] Agregar a `tests/e2e/work-item-fields.spec.ts` los escenarios de quickstart.md bloques 4 y 5:
+- [X] T044 [F8-US4] Agregar a `tests/e2e/work-item-fields.spec.ts` los escenarios de quickstart.md bloques 4 y 5:
   1. Crear el área "Frontend".
   2. En otro Work Item aparece como sugerencia; escribir "FRONTEND" reutiliza el valor.
   3. La iteración "Sprint 1" no aparece en Area.
@@ -392,36 +392,36 @@ que se amplían en línea y separados entre sí y entre proyectos.
 **Purpose**: Lector de punta a punta, accesibilidad, documentación y
 validación completa.
 
-- [ ] T045 Agregar a `tests/e2e/work-item-fields.spec.ts` el escenario de quickstart.md bloque 6.2 y 6.3, usando `inviteAndAccept(…, "viewer")` de `tests/e2e/helpers.ts`:
+- [X] T045 Agregar a `tests/e2e/work-item-fields.spec.ts` el escenario de quickstart.md bloque 6.2 y 6.3, usando `inviteAndAccept(…, "viewer")` de `tests/e2e/helpers.ts`:
   - La Lectora ve el badge de prioridad, la fecha objetivo y el indicador de columna de cierre, pero no ve `ClosingStageToggle`.
   - En el detalle, los controles de Planning están deshabilitados y no hay botón `Close` (FR-019, SC-005).
-- [ ] T046 [P] Pasada de accesibilidad de los controles nuevos:
+- [X] T046 [P] Pasada de accesibilidad de los controles nuevos:
   - Todos los `<select>`, `<input type="date">` y `CatalogPicker` tienen etiqueta asociada.
   - `ClosingStageToggle` es operable con teclado y anuncia su estado (`aria-pressed`).
   - "Overdue" y la prioridad no dependen solo del color.
   - El botón `Close` deshabilitado expone su explicación (`aria-describedby`).
 
   Archivos: `components/board/ClosingStageToggle.tsx`, `components/board/PriorityBadge.tsx`, `components/board/TargetDateChip.tsx`, `components/work-items/CatalogPicker.tsx` y `components/work-items/WorkItemDetailView.tsx`. Mismo criterio que T050 de 007.
-- [ ] T047 [P] Actualizar `README.md`:
+- [X] T047 [P] Actualizar `README.md`:
   - § Project status: Fase 3 "in progress", con [`specs/008-work-item-fields`](specs/008-work-item-fields/) enlazado.
   - § Roadmap: la Fase 3 deja de ser "candidates" (confirmada en alcance: vistas de lista y tabla, sin calendario, y campos extendidos). El punto 9 queda como implementado, con prioridad, severidad, área, iteración, fechas y columnas de cierre, y el punto 8 queda como "next (009)".
   - § Core concepts: mencionar las columnas de cierre y las fechas de un Work Item.
-- [ ] T048 [P] Actualizar `AGENTS.md`:
+- [X] T048 [P] Actualizar `AGENTS.md`:
   - Agregar `008-work-item-fields` a la lista de specs (§ Start here) como primera feature de Fase 3.
   - En § "Constitution highlights an agent is likely to violate", añadir que todo código que cambie la columna de un Work Item o la marca `is_closing` de una columna MUST mantener `closed_at` a través de `nextClosedAt` (`lib/work-item-closing.ts`), en la misma transacción y bloqueando las filas de `stages`. La invariante es `closed_at IS NOT NULL ⇔ stages.is_closing`. Añadir también que área e iteración se resuelven siempre por nombre dentro del proyecto del Work Item.
   - Actualizar § Current state of the codebase para mencionar `lib/work-item-fields.ts`, `lib/work-item-closing.ts` y `lib/work-item-catalogs.ts`.
-- [ ] T049 [P] Agregar notas de enmienda, sin reescribir el texto histórico:
+- [X] T049 [P] Agregar notas de enmienda, sin reescribir el texto histórico:
   - En `specs/003-kanban-board/spec.md`, bajo la entidad Stage/Columna: "Ampliado por [008-work-item-fields](../008-work-item-fields/spec.md) (FR-011): una columna puede marcarse como de cierre".
   - En `specs/004-work-items/spec.md`, bajo FR-005 (mover): "Ampliado por [008-work-item-fields](../008-work-item-fields/spec.md) (FR-013): mover a o desde una columna de cierre cierra o reabre el Work Item" y "Reordenar ya no cambia la fecha de última modificación (008 research.md)".
-- [ ] T050 Desde la raíz del repositorio, correr `npm run lint`, `npm run test` y `npx tsc --noEmit`. Corregir cualquier fallo, en particular tipos derivados de `$inferSelect` en mocks de tests existentes que ahora requieren las columnas nuevas (`isClosing`, `closedAt`, etc.).
-- [ ] T051 Correr `npm run test:e2e` **solo tras confirmar con el product owner que la base de `.env.local` es desechable**, porque `tests/e2e/setup.ts` trunca todas las tablas. Confirmar que las suites de Fases 1 y 2 siguen en verde (SC-003) y que pasa `tests/e2e/work-item-fields.spec.ts`. Registrar el resultado en esta tarea.
+- [X] T050 Desde la raíz del repositorio, correr `npm run lint`, `npm run test` y `npx tsc --noEmit`. Corregir cualquier fallo, en particular tipos derivados de `$inferSelect` en mocks de tests existentes que ahora requieren las columnas nuevas (`isClosing`, `closedAt`, etc.).
+- [X] T051 Correr `npm run test:e2e` **solo tras confirmar con el product owner que la base de `.env.local` es desechable**, porque `tests/e2e/setup.ts` trunca todas las tablas. Confirmar que las suites de Fases 1 y 2 siguen en verde (SC-003) y que pasa `tests/e2e/work-item-fields.spec.ts`. Registrar el resultado en esta tarea. — *Hecho 2026-09-22* (el product owner confirmó que la base de `.env.local` es la de pruebas): 48/48 en verde (14.2 min), incluidas todas las suites de Fases 1 y 2. `tests/e2e/work-item-fields.spec.ts` se volvió a correr sobre el código final: 5/5. La consulta de invariante de cierre sobre los datos que deja la suite dio `0`. De paso, `tests/e2e/setup.ts` ahora nombra `areas` e `iterations` en el `TRUNCATE`.
 - [ ] T052 Correr manualmente `quickstart.md` de punta a punta (bloques 0 a 7):
   - La consulta de invariante antes y después del bloque 3 (SC-006).
   - Los Work Items anteriores a la migración (bloque 6.1, SC-003).
   - La escala con ≥100 Work Items (bloque 7, SC-002/SC-007).
 
   Registrar los resultados.
-
+ — *Estado 2026-09-22 (abierta)*: ya está cubierto de forma automática lo siguiente. Los bloques 1 a 5 y 6.2-6.3 están en `tests/e2e/work-item-fields.spec.ts`. La invariante (bloques 0 y 3.9) dio `0` tras migrar y tras la suite completa. El bloque 7 está parcialmente cubierto por el e2e de escala de 005. Queda el pase manual con cuentas reales. **Bloque 6.1**: los 99 Work Items anteriores a la migración pasaron por ella con los campos nuevos vacíos y la invariante en `0`, pero la primera corrida e2e vació la base antes de abrirlos, editarlos y moverlos a mano. Como la migración solo agrega columnas nullable, esas filas son equivalentes a Work Items nuevos con campos vacíos, que las suites e2e sí ejercitan.
 ---
 
 ## Dependencies & Execution Order

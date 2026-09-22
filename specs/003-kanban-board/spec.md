@@ -171,6 +171,9 @@ verificando que el nuevo nombre se refleja para todos los miembros.
   al mismo tiempo, su columna visual en el tablero — son una misma entidad vista
   desde dos ángulos, nunca existen por separado. Atributos: nombre, posición/orden
   dentro del tablero, proyecto al que pertenece.
+  *Ampliado por [008-work-item-fields](../008-work-item-fields/spec.md#functional-requirements)
+  (FR-011): una columna puede marcarse como "de cierre"; los Work Items que
+  están en ella quedan cerrados.*
 
 ## Success Criteria *(mandatory)*
 
