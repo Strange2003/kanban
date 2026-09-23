@@ -4,19 +4,20 @@ import { useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { WorkItemWithDisplayId } from "@/lib/actions/work-items";
+import type { BoardWorkItem } from "@/lib/actions/board";
 import { cn } from "@/lib/utils";
 import { useLocalToday } from "@/lib/dates";
 import { LEVEL_LABELS, isOverdue } from "@/lib/work-item-fields";
 import { PriorityBadge } from "@/components/board/PriorityBadge";
 import { TargetDateChip } from "@/components/board/TargetDateChip";
+import { Avatar } from "@/components/ui/avatar";
 
 export function WorkItemCard({
   workItem,
   projectPublicId,
   canEdit,
 }: {
-  workItem: WorkItemWithDisplayId;
+  workItem: BoardWorkItem;
   projectPublicId: string;
   // False for a Viewer (007-roles-permissions): the card stays clickable — they
   // can still open the detail view — but can't be dragged.
@@ -39,6 +40,8 @@ export function WorkItemCard({
     `${workItem.displayId}: ${workItem.title}`,
     workItem.priority && `priority ${LEVEL_LABELS[workItem.priority]}`,
     overdue && "overdue",
+    // FR-007 of 011-agent-access-mcp.
+    workItem.assignee && `assigned to ${workItem.assignee.name}`,
   ]
     .filter(Boolean)
     .join(", ");
@@ -93,11 +96,20 @@ export function WorkItemCard({
     >
       <span className="text-muted-foreground text-xs">{workItem.displayId}</span>
       <p className="font-medium">{workItem.title}</p>
-      {/* FR-016 of 008: only priority and target date on the card — the rest lives in the detail view. */}
-      {(workItem.priority || workItem.targetDate) && (
+      {/* FR-016 of 008: only priority and target date on the card — the rest lives in the detail view —
+          plus the assignee (FR-007 of 011-agent-access-mcp). */}
+      {(workItem.priority || workItem.targetDate || workItem.assignee) && (
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
           {workItem.priority && <PriorityBadge level={workItem.priority} />}
           {workItem.targetDate && <TargetDateChip targetDate={workItem.targetDate} closedAt={workItem.closedAt} />}
+          {workItem.assignee && (
+            <Avatar
+              name={workItem.assignee.name}
+              image={workItem.assignee.image}
+              size="sm"
+              className="ml-auto"
+            />
+          )}
         </div>
       )}
     </div>

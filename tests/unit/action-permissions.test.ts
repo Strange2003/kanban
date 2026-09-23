@@ -244,6 +244,7 @@ const MEMBERSHIP_ONLY_READS = [
   "listProjectMembers",
   "listMyProjects", // only the caller's own projects
   "listMyNotifications", // only the caller's own notifications
+  "markNotificationRead", // 011: only the caller's own notification (checked in the query)
   "createProject", // any signed-in user may create a project
   "respondToInvitation", // only the invited email may answer it (checked in the action)
 ];

@@ -8,6 +8,7 @@ import { projects, projectMembers } from "@/db/schema";
 import { user } from "@/db/auth-schema";
 import { getSession } from "@/lib/auth";
 import { getActor } from "@/lib/actor";
+import { logUnassignOnMemberExitWithinTx } from "@/lib/work-item-assignee";
 import { requireProjectMember, requireProjectPermission } from "@/lib/permissions";
 import { ASSIGNABLE_ROLES, type AssignableRole, type ProjectRole } from "@/lib/roles";
 import { generatePublicId, deriveWorkItemPrefix } from "@/lib/ids";
@@ -189,9 +190,14 @@ export async function removeMember(input: { projectPublicId: string; userId: str
       throw new AppError("CANNOT_REMOVE_OWNER", "The project owner can't be removed.");
     }
 
-    await db
-      .delete(projectMembers)
-      .where(and(eq(projectMembers.projectId, project.id), eq(projectMembers.userId, input.userId)));
+    // FR-006 of 011-agent-access-mcp: their Work Items here become unassigned
+    // (the composite FK's SET NULL) with a "left the project" history entry.
+    await db.transaction(async (tx) => {
+      await logUnassignOnMemberExitWithinTx(tx, { projectId: project.id, userId: input.userId });
+      await tx
+        .delete(projectMembers)
+        .where(and(eq(projectMembers.projectId, project.id), eq(projectMembers.userId, input.userId)));
+    });
 
     revalidatePath(`/projects/${input.projectPublicId}/settings`);
     revalidatePath("/");
@@ -215,9 +221,13 @@ export async function leaveProject(projectPublicId: string): Promise<Result<void
     }
     const { actor, project } = context;
 
-    await db
-      .delete(projectMembers)
-      .where(and(eq(projectMembers.projectId, project.id), eq(projectMembers.userId, actor.userId)));
+    // FR-006 of 011-agent-access-mcp, as in removeMember.
+    await db.transaction(async (tx) => {
+      await logUnassignOnMemberExitWithinTx(tx, { projectId: project.id, userId: actor.userId });
+      await tx
+        .delete(projectMembers)
+        .where(and(eq(projectMembers.projectId, project.id), eq(projectMembers.userId, actor.userId)));
+    });
 
     revalidatePath("/");
   });

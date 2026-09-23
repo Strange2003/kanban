@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { LEVEL_LABELS, WORK_ITEM_LEVELS } from "@/lib/work-item-fields";
 import {
   DEFAULT_VIEW_QUERY,
+  ME,
   NONE,
   hasActiveFilters,
   type ViewQuery,
@@ -177,6 +178,17 @@ export function ViewFilters({
         onChange={(iterations) => set({ iterations })}
       />
       <MultiSelectFilter label="Tag" choices={nameChoices(options.tags)} selected={query.tags} onChange={(tags) => set({ tags })} />
+      {/* FR-008 of 011-agent-access-mcp. */}
+      <MultiSelectFilter
+        label="Assignee"
+        choices={[
+          { value: ME, label: "Assigned to me" },
+          ...options.members.map((m) => ({ value: m.userId, label: m.name })),
+          { value: NONE, label: "Unassigned" },
+        ]}
+        selected={query.assignees}
+        onChange={(assignees) => set({ assignees })}
+      />
       <label className="flex items-center gap-1.5 text-sm">
         <input type="checkbox" checked={query.overdue} onChange={(e) => set({ overdue: e.target.checked })} />
         Overdue only

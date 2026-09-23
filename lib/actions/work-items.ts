@@ -5,6 +5,7 @@ import { and, asc, desc, eq, gt, gte, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
 import { workItems, stages, projects, workItemActivity, tags, workItemTags, areas, iterations } from "@/db/schema";
+import { user } from "@/db/auth-schema";
 import { logActivity } from "@/lib/activity";
 import { requireProjectMember, requireProjectPermission } from "@/lib/permissions";
 import { AppError, runAction, type Result } from "@/lib/errors";
@@ -606,19 +607,22 @@ export async function getWorkItemTags(workItemId: number): Promise<Result<(typeo
   });
 }
 
+/** One history event plus who made it (FR-034 of 011-agent-access-mcp); `actorName` is null on older rows. */
+export type WorkItemActivityEntry = typeof workItemActivity.$inferSelect & { actorName: string | null };
+
 // Estándares de Producto y Datos § Auditoría de la constitución.
-export async function listWorkItemActivity(
-  workItemId: number,
-): Promise<Result<(typeof workItemActivity.$inferSelect)[]>> {
+export async function listWorkItemActivity(workItemId: number): Promise<Result<WorkItemActivityEntry[]>> {
   return runAction(async () => {
     const { project } = await getWorkItemAndProject(workItemId);
     await requireProjectMember(project.publicId);
 
-    return db
-      .select()
+    const rows = await db
+      .select({ activity: workItemActivity, actorName: user.name })
       .from(workItemActivity)
+      .leftJoin(user, eq(user.id, workItemActivity.actorUserId))
       .where(eq(workItemActivity.workItemId, workItemId))
       .orderBy(desc(workItemActivity.createdAt));
+    return rows.map((row) => ({ ...row.activity, actorName: row.actorName }));
   });
 }
 

@@ -3,12 +3,19 @@
 import { revalidatePath } from "next/cache";
 import { and, asc, eq, or, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { workItems, workItemRelatedLinks, workItemActivity, stages, areas, iterations } from "@/db/schema";
+import { workItems, workItemRelatedLinks, stages, areas, iterations, projectMembers } from "@/db/schema";
+import { user } from "@/db/auth-schema";
 import { logActivity } from "@/lib/activity";
 import { requireProjectMember, requireProjectPermission } from "@/lib/permissions";
 import { AppError, runAction, type Result } from "@/lib/errors";
-import type { ProjectRole } from "@/lib/roles";
-import { listProjectTags, getWorkItemTags, listWorkItemActivity } from "@/lib/actions/work-items";
+import { can, type ProjectRole } from "@/lib/roles";
+import {
+  listProjectTags,
+  getWorkItemTags,
+  listWorkItemActivity,
+  type WorkItemActivityEntry,
+} from "@/lib/actions/work-items";
+import type { AssigneeView } from "@/lib/work-item-view";
 import { getWorkItemAndProject, workItemIsAncestorOf } from "@/lib/work-item-queries";
 import { listCatalog } from "@/lib/work-item-catalogs";
 
@@ -355,7 +362,7 @@ export async function listProjectWorkItems(
 export type WorkItemDetailData = {
   catalogTags: string[];
   itemTags: string[];
-  activity: (typeof workItemActivity.$inferSelect)[];
+  activity: WorkItemActivityEntry[];
   relations: WorkItemRelations;
   pickableWorkItems: WorkItemRelationRef[];
   // The caller's current role in the project (FR-005 of 007-roles-permissions):
@@ -370,22 +377,36 @@ export type WorkItemDetailData = {
   itemIteration: string | null;
   stage: { name: string; isClosing: boolean };
   hasClosingStage: boolean;
+  // 011-agent-access-mcp: the current assignee and every current member for
+  // the Assignee picker (FR-004). `email` only for roles that already see
+  // third parties' emails in the UI (FR-018 of 007), to tell same-named people apart.
+  assignee: AssigneeView | null;
+  members: (AssigneeView & { email?: string })[];
 };
 
 // The closing/catalog part of the detail data. Not exported (this is a "use
 // server" file); only called after getWorkItemDetailData's membership check,
 // and every lookup is scoped to that project.
-async function getFieldsDetail(projectId: number, workItemId: number) {
+async function getFieldsDetail(projectId: number, workItemId: number, role: ProjectRole) {
   // All four lookups at once: run one after another they added sequential
   // round trips to every detail page open (008 SC-007; found through a flaky
   // 005 e2e whose page took >2s to show a relation link).
-  const [[row], [closing], catalogAreas, catalogIterations] = await Promise.all([
+  const [[row], [closing], catalogAreas, catalogIterations, memberRows] = await Promise.all([
     db
-      .select({ stageName: stages.name, isClosing: stages.isClosing, areaName: areas.name, iterationName: iterations.name })
+      .select({
+        stageName: stages.name,
+        isClosing: stages.isClosing,
+        areaName: areas.name,
+        iterationName: iterations.name,
+        assigneeUserId: workItems.assigneeUserId,
+        assigneeName: user.name,
+        assigneeImage: user.image,
+      })
       .from(workItems)
       .innerJoin(stages, eq(stages.id, workItems.stageId))
       .leftJoin(areas, eq(areas.id, workItems.areaId))
       .leftJoin(iterations, eq(iterations.id, workItems.iterationId))
+      .leftJoin(user, eq(user.id, workItems.assigneeUserId))
       .where(and(eq(workItems.id, workItemId), eq(workItems.projectId, projectId)))
       .limit(1),
     db
@@ -395,8 +416,15 @@ async function getFieldsDetail(projectId: number, workItemId: number) {
       .limit(1),
     listCatalog("area", projectId),
     listCatalog("iteration", projectId),
+    db
+      .select({ userId: projectMembers.userId, name: user.name, image: user.image, email: user.email })
+      .from(projectMembers)
+      .innerJoin(user, eq(user.id, projectMembers.userId))
+      .where(eq(projectMembers.projectId, projectId))
+      .orderBy(asc(user.name)),
   ]);
   if (!row) throw new AppError("NOT_FOUND", "Work item not found.");
+  const showEmails = can(role, "invitation:viewPending");
 
   return {
     catalogAreas,
@@ -405,6 +433,11 @@ async function getFieldsDetail(projectId: number, workItemId: number) {
     itemIteration: row.iterationName,
     stage: { name: row.stageName, isClosing: row.isClosing },
     hasClosingStage: closing !== undefined,
+    assignee:
+      row.assigneeUserId !== null
+        ? { userId: row.assigneeUserId, name: row.assigneeName ?? "Unknown", image: row.assigneeImage }
+        : null,
+    members: memberRows.map(({ email, ...member }) => (showEmails ? { ...member, email } : member)),
   };
 }
 
@@ -426,7 +459,9 @@ export async function getWorkItemDetailData(
     // The 008 fields lookup only needs the project id, so it starts as soon as
     // membership is confirmed and overlaps with the other reads.
     const member = requireProjectMember(projectPublicId);
-    const fields = member.then(({ project }) => getFieldsDetail(project.id, workItemId));
+    const fields = member.then(({ project, membership }) =>
+      getFieldsDetail(project.id, workItemId, membership.role),
+    );
     const [
       { membership },
       catalogResult,

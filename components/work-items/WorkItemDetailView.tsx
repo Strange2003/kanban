@@ -20,11 +20,22 @@ import { ReadOnlyNotice } from "@/components/ui/read-only-notice";
 import { isRolePermissionError } from "@/lib/errors";
 import { can } from "@/lib/roles";
 import { CatalogPicker } from "@/components/work-items/CatalogPicker";
+import { AssigneePicker } from "@/components/work-items/AssigneePicker";
 import { LocalDate } from "@/components/ui/local-date";
 import { formatCalendarDate, useLocalToday } from "@/lib/dates";
 import { LEVEL_LABELS, WORK_ITEM_LEVELS, isOverdue, type WorkItemLevel } from "@/lib/work-item-fields";
 
-type ActivityEntry = { id: number; type: string; payload: unknown; createdAt: Date };
+type ActivityEntry = {
+  id: number;
+  type: string;
+  payload: unknown;
+  createdAt: Date;
+  // 011-agent-access-mcp FR-034: who made the change, and through which AI agent.
+  actorName: string | null;
+  agentName: string | null;
+};
+
+type PersonRef = { userId: string; name: string } | null;
 
 // 008-work-item-fields (FR-020): these fields are shown with their previous
 // and new value; the older ones keep the "Edited …" summary.
@@ -69,6 +80,12 @@ function describeActivity(entry: ActivityEntry): string {
     if (via === "stage_unmarked") return `Reopened: column ${stageName} unmarked as closing`;
     return `Reopened (moved to ${stageName})`;
   }
+  if (entry.type === "assignee_changed") {
+    const { from, to, reason } = entry.payload as { from: PersonRef; to: PersonRef; reason?: string };
+    if (reason === "member_left") return `Unassigned (${from?.name ?? "the assignee"} left the project)`;
+    return to ? `Assigned to ${to.name}` : "Unassigned";
+  }
+  if (entry.type === "created") return "Created";
   if (entry.type === "parent_linked") return "Linked to a parent Work Item";
   if (entry.type === "parent_unlinked") return "Unlinked from its parent Work Item";
   if (entry.type === "related_linked") return "Linked to a related Work Item";
@@ -106,7 +123,8 @@ export function WorkItemDetailView({
   const canEditRelations = can(initialDetail.role, "relationship:edit");
   const [title, setTitle] = useState(workItem.title);
   const [description, setDescription] = useState(workItem.description ?? "");
-  const [stakeholder, setStakeholder] = useState(workItem.stakeholder ?? "");
+  // 011-agent-access-mcp FR-004 (replaces the free-text stakeholder).
+  const [assigneeUserId, setAssigneeUserId] = useState<string | null>(workItem.assigneeUserId);
   // 008-work-item-fields "Planning" fields, saved with the same Save button.
   const [priority, setPriority] = useState<WorkItemLevel | null>(workItem.priority);
   const [severity, setSeverity] = useState<WorkItemLevel | null>(workItem.severity);
@@ -150,7 +168,7 @@ export function WorkItemDetailView({
     setPrevWorkItemId(workItem.id);
     setTitle(workItem.title);
     setDescription(workItem.description ?? "");
-    setStakeholder(workItem.stakeholder ?? "");
+    setAssigneeUserId(workItem.assigneeUserId);
     setPriority(workItem.priority);
     setSeverity(workItem.severity);
     setArea(initialDetail.itemArea);
@@ -238,7 +256,8 @@ export function WorkItemDetailView({
       workItemId: workItem.id,
       title,
       description,
-      stakeholder,
+      // Only when it changed: an unchanged value must not re-notify or re-log (FR-013).
+      ...(assigneeUserId !== workItem.assigneeUserId ? { assigneeUserId } : {}),
       tagNames: selectedTags,
       priority,
       severity,
@@ -318,12 +337,14 @@ export function WorkItemDetailView({
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="wi-stakeholder">Stakeholder</Label>
-          <Input
-            id="wi-stakeholder"
-            value={stakeholder}
-            onChange={(e) => setStakeholder(e.target.value)}
-            readOnly={!canEdit}
+          <Label htmlFor="wi-assignee">Assignee</Label>
+          <AssigneePicker
+            id="wi-assignee"
+            members={initialDetail.members}
+            value={assigneeUserId}
+            onChange={setAssigneeUserId}
+            disabled={!canEdit}
+            className={selectClassName}
           />
         </div>
         <div className="space-y-1.5">
@@ -598,7 +619,16 @@ export function WorkItemDetailView({
             <Label>Activity</Label>
             <ul className="text-muted-foreground max-h-40 space-y-1 overflow-y-auto text-xs">
               {activity.map((entry) => (
-                <li key={entry.id}>{describeActivity(entry)}</li>
+                <li key={entry.id}>
+                  {describeActivity(entry)}
+                  {entry.actorName && (
+                    <span className="text-muted-foreground/80">
+                      {" "}
+                      — by {entry.actorName}
+                      {entry.agentName && ` via ${entry.agentName}`}
+                    </span>
+                  )}
+                </li>
               ))}
             </ul>
           </div>

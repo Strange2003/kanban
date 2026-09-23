@@ -2,9 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { db } from "@/db/client";
-import { invitations, notifications, projectMembers, projects } from "@/db/schema";
+import { invitations, notifications, projectMembers, projects, workItems } from "@/db/schema";
 import { user } from "@/db/auth-schema";
 import { getSession } from "@/lib/auth";
 import { requireProjectPermission } from "@/lib/permissions";
@@ -229,6 +230,7 @@ export async function listPendingInvitations(projectPublicId: string): Promise<R
 }
 
 export type NotificationWithInvitation = {
+  type: "invitation";
   id: number;
   createdAt: Date;
   invitationPublicId: string;
@@ -237,13 +239,37 @@ export type NotificationWithInvitation = {
   invitedByName: string;
 };
 
-// FR-006 of 001-accounts-invitations, US3
-export async function listMyNotifications(): Promise<Result<NotificationWithInvitation[]>> {
+/**
+ * 011-agent-access-mcp FR-011..FR-013: "X assigned you KAN-12 in Project".
+ * `available: false` when the Work Item was deleted or the recipient lost
+ * access to its project — then nothing about its current state is revealed.
+ */
+export type AssignmentNotification = {
+  type: "work_item_assigned";
+  id: number;
+  createdAt: Date;
+  assignedByName: string;
+  agentName: string | null;
+} & (
+  | { available: true; projectPublicId: string; projectName: string; workItemDisplayId: string; displayNumber: number; title: string }
+  | { available: false }
+);
+
+export type NotificationItem = NotificationWithInvitation | AssignmentNotification;
+
+// FR-006 of 001-accounts-invitations, US3; assignment notifications of 011-agent-access-mcp.
+export async function listMyNotifications(): Promise<Result<NotificationItem[]>> {
   return runAction(async () => {
     const session = await getSession();
     if (!session) throw new AppError("UNAUTHENTICATED", "You must be signed in.");
+    const unreadOfMine = (type: "invitation" | "work_item_assigned") =>
+      and(
+        eq(notifications.userId, session.user.id),
+        eq(notifications.type, type),
+        sql`${notifications.readAt} is null`,
+      );
 
-    const rows = await db
+    const invitationRows = await db
       .select({
         id: notifications.id,
         createdAt: notifications.createdAt,
@@ -256,9 +282,82 @@ export async function listMyNotifications(): Promise<Result<NotificationWithInvi
       .innerJoin(invitations, eq(invitations.publicId, sql<string>`${notifications.payload}->>'invitationId'`))
       .innerJoin(projects, eq(projects.id, invitations.projectId))
       .innerJoin(user, eq(user.id, invitations.invitedByUserId))
-      .where(and(eq(notifications.userId, session.user.id), sql`${notifications.readAt} is null`))
+      .where(unreadOfMine("invitation"))
       .orderBy(desc(notifications.createdAt));
 
-    return rows;
+    // The Work Item and project are only resolved through the recipient's
+    // CURRENT membership (Principle IV): once they lose access, the
+    // notification says the Work Item is no longer available.
+    const assigner = alias(user, "assigner");
+    const assignmentRows = await db
+      .select({
+        id: notifications.id,
+        createdAt: notifications.createdAt,
+        agentName: sql<string | null>`${notifications.payload}->>'agentName'`,
+        assignedByName: assigner.name,
+        workItemTitle: workItems.title,
+        displayNumber: workItems.displayNumber,
+        projectPublicId: projects.publicId,
+        projectName: projects.name,
+        prefix: projects.workItemPrefix,
+        memberUserId: projectMembers.userId,
+      })
+      .from(notifications)
+      .leftJoin(assigner, eq(assigner.id, sql<string>`${notifications.payload}->>'assignedByUserId'`))
+      .leftJoin(workItems, eq(workItems.id, sql<number>`(${notifications.payload}->>'workItemId')::int`))
+      .leftJoin(projects, eq(projects.id, workItems.projectId))
+      .leftJoin(
+        projectMembers,
+        and(eq(projectMembers.projectId, workItems.projectId), eq(projectMembers.userId, session.user.id)),
+      )
+      .where(unreadOfMine("work_item_assigned"))
+      .orderBy(desc(notifications.createdAt));
+
+    const assignments: AssignmentNotification[] = assignmentRows.map((row) => {
+      const base = {
+        type: "work_item_assigned" as const,
+        id: row.id,
+        createdAt: row.createdAt,
+        assignedByName: row.assignedByName ?? "Someone",
+        agentName: row.agentName,
+      };
+      if (row.memberUserId === null || row.projectPublicId === null || row.displayNumber === null) {
+        return { ...base, available: false as const };
+      }
+      return {
+        ...base,
+        available: true as const,
+        projectPublicId: row.projectPublicId,
+        projectName: row.projectName ?? "",
+        workItemDisplayId: `${row.prefix}-${row.displayNumber}`,
+        displayNumber: row.displayNumber,
+        title: row.workItemTitle ?? "",
+      };
+    });
+
+    return [...invitationRows.map((row) => ({ type: "invitation" as const, ...row })), ...assignments].sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+    );
+  });
+}
+
+// FR-012 of 011-agent-access-mcp: only the caller's own notification, idempotent.
+export async function markNotificationRead(notificationId: number): Promise<Result<void>> {
+  return runAction(async () => {
+    const session = await getSession();
+    if (!session) throw new AppError("UNAUTHENTICATED", "You must be signed in.");
+    if (!Number.isInteger(notificationId)) throw new AppError("VALIDATION_ERROR", "Invalid notification.");
+
+    await db
+      .update(notifications)
+      .set({ readAt: new Date() })
+      .where(
+        and(
+          eq(notifications.id, notificationId),
+          eq(notifications.userId, session.user.id),
+          sql`${notifications.readAt} is null`,
+        ),
+      );
+    revalidatePath("/");
   });
 }
