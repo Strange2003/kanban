@@ -115,7 +115,8 @@ This project follows **Spec-Driven Development**: every feature is specified, cl
 - ✅ **Phase 1 (MVP core)** fully specified, planned, and **implemented** — 121/121 tasks done across [`specs/001-accounts-invitations`](specs/001-accounts-invitations/), including P1 (MVP), P2/P3 (invitations, project/board/Work Item management), and Polish (loading states, error boundary, accessibility, unit tests)
 - ✅ **Phase 2 (depth)** — Work Item relationships ([`specs/005-work-item-relationships`](specs/005-work-item-relationships/)), the Work Item detail view ([`specs/006-work-item-detail-view`](specs/006-work-item-detail-view/)) and roles & permissions ([`specs/007-roles-permissions`](specs/007-roles-permissions/)) **implemented**, with the full unit and end-to-end suites green; the manual end-to-end pass of 007's `quickstart.md` (T057) is still open
 - ✅ **Phase 3 (planning & views)** — extended Work Item fields and closing columns ([`specs/008-work-item-fields`](specs/008-work-item-fields/)) and the List and Table views ([`specs/009-work-item-views`](specs/009-work-item-views/)) **implemented**, with the unit and end-to-end suites green (a calendar view is deferred); the manual quickstart passes of 008 (T052) and 009 (T028) are still open
-- ⬜ **Deployment** — nothing is deployed yet (no Render service). All migrations (`0000`-`0004`) are applied to the development Neon database
+- ⬜ **Deployment** — nothing is deployed yet (no Render service). All migrations (`0000`-`0004`) are applied to the development Neon database; `main` on GitHub has the full Phase 3 code
+- ⬜ **Phase 4** — not specified yet, and its scope isn't confirmed (see the candidates in [Roadmap](#roadmap))
 
 ## Roadmap
 
@@ -133,6 +134,12 @@ This project follows **Spec-Driven Development**: every feature is specified, cl
 **Phase 3 — Planning & views** ✅ *done*
 8. Additional views: list and table ✅ *done* *(a calendar view is deferred)*
 9. Extended fields (priority, severity, area, iteration, dates, closing columns) ✅ *done*
+
+**Phase 4 — Candidates** *(not yet confirmed in scope)*
+- Discussion / comments on Work Items (listed in the original vision's data hierarchy and Work Item reference)
+- Calendar view (deferred from Phase 3; Work Items already store start, target and closing dates for it)
+- Managing catalogs: rename/delete tags, areas and iterations (every catalog only grows today)
+- Deployment: a first public Render instance
 
 ## Contributing
 
