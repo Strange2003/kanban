@@ -7,6 +7,7 @@ import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { LegalLinks } from "@/components/legal/LegalLinks";
 
 // FR-002 of 001-accounts-invitations: at least 8 characters.
 const signUpSchema = z.object({
@@ -124,6 +125,8 @@ export default function SignUpPage() {
           Sign in
         </Link>
       </p>
+
+      <LegalLinks consent />
     </main>
   );
 }

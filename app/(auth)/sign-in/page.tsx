@@ -8,6 +8,7 @@ import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { LegalLinks } from "@/components/legal/LegalLinks";
 
 const signInSchema = z.object({
   email: z.email("Enter a valid email address."),
@@ -104,6 +105,8 @@ export default function SignInPage() {
           Sign up
         </Link>
       </p>
+
+      <LegalLinks />
     </main>
   );
 }

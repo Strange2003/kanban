@@ -5,7 +5,7 @@ An open-source, self-hostable Kanban board for personal and team projects — ac
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Status: Phase 3 complete](https://img.shields.io/badge/status-phase%203%20complete-brightgreen)](specs/)
 
-> **Project status**: **Phases 1, 2 and 3 are implemented** — accounts, invitations, projects, the Kanban board, Work Items, their relationships, a dedicated detail view, per-project roles (Owner / Member / Viewer) and, from Phase 3, extended Work Item fields (priority, severity, area, iteration, dates) with closing columns plus List and Table views all work end-to-end against a real Postgres (Neon) database in local development; no instance has been deployed yet. See [Project Status](#project-status) for what's next.
+> **Project status**: **Phases 1, 2 and 3 are implemented** — accounts, invitations, projects, the Kanban board, Work Items, their relationships, a dedicated detail view, per-project roles (Owner / Member / Viewer) and, from Phase 3, extended Work Item fields (priority, severity, area, iteration, dates) with closing columns plus List and Table views all work end-to-end against a real Postgres (Neon) database, and the first instance is deployed on Render. See [Project Status](#project-status) for what's next.
 
 ## Why this project exists
 
@@ -56,6 +56,7 @@ You'll need free accounts with two external services (both have a free tier that
 1. **[Neon](https://neon.tech)** — create a project, copy its Postgres connection string. Required — the app won't start without `DATABASE_URL`.
 2. **[Resend](https://resend.com)** — create an API key. Required — used to send verification and password-reset emails; the app won't start without `RESEND_API_KEY` either.
 3. *(Optional)* **[Google Cloud Console](https://console.cloud.google.com)** — create an OAuth 2.0 Client ID (type "Web application") for "Sign in with Google". Add `<your-domain>/api/auth/callback/google` as an authorized redirect URI. Skip this and leave `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` blank if you only need email/password sign-up — the "Continue with Google" button just won't work until you fill them in.
+   While the Google app is in *Testing*, only the test users you list can sign in with Google. To open it to everyone, fill in its branding page with `<your-domain>` as the home page, `<your-domain>/privacy` as the privacy policy and `<your-domain>/terms` as the terms of service (all three are built in — see below), don't upload a logo (that triggers Google's brand verification), and click **Publish app**.
 
 ### Environment variables
 
@@ -68,6 +69,9 @@ Copy `.env.example` to `.env.local` and fill in:
 | `BETTER_AUTH_SECRET` | A random secret used to sign sessions (`openssl rand -base64 32`) |
 | `BETTER_AUTH_URL` | Base URL the app is reachable at — `http://localhost:3000` for local dev |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | *(Optional)* From your Google Cloud OAuth client |
+| `OPERATOR_NAME` / `OPERATOR_CONTACT_EMAIL` | *(Optional)* Who runs your instance and how to reach them — shown on the public `/privacy` and `/terms` pages |
+
+**Legal pages**: every instance serves a Privacy Policy at `/privacy` and Terms of Service at `/terms`, linked from the sign-in and sign-up screens. The text is a generic starting point for a personal or team instance — it is **not legal advice**. Whoever runs an instance is responsible for its data and for reviewing that text; edit `app/(legal)/` in your own copy if you need something different.
 
 Resend's sandbox only delivers to the email address on your own Resend account — signing up with any other address won't get a real verification email until you verify a sending domain in Resend.
 
@@ -115,7 +119,8 @@ This project follows **Spec-Driven Development**: every feature is specified, cl
 - ✅ **Phase 1 (MVP core)** fully specified, planned, and **implemented** — 121/121 tasks done across [`specs/001-accounts-invitations`](specs/001-accounts-invitations/), including P1 (MVP), P2/P3 (invitations, project/board/Work Item management), and Polish (loading states, error boundary, accessibility, unit tests)
 - ✅ **Phase 2 (depth)** — Work Item relationships ([`specs/005-work-item-relationships`](specs/005-work-item-relationships/)), the Work Item detail view ([`specs/006-work-item-detail-view`](specs/006-work-item-detail-view/)) and roles & permissions ([`specs/007-roles-permissions`](specs/007-roles-permissions/)) **implemented**, with the full unit and end-to-end suites green; the manual end-to-end pass of 007's `quickstart.md` (T057) is still open
 - ✅ **Phase 3 (planning & views)** — extended Work Item fields and closing columns ([`specs/008-work-item-fields`](specs/008-work-item-fields/)) and the List and Table views ([`specs/009-work-item-views`](specs/009-work-item-views/)) **implemented**, with the unit and end-to-end suites green (a calendar view is deferred); the manual quickstart passes of 008 (T052) and 009 (T028) are still open
-- ⬜ **Deployment** — nothing is deployed yet (no Render service). All migrations (`0000`-`0004`) are applied to the development Neon database; `main` on GitHub has the full Phase 3 code
+- ✅ **Deployment** — the first instance runs on Render against its own production Neon branch (all migrations `0000`-`0004` applied); development and the e2e suite use a separate `dev` branch
+- ✅ **Public legal pages** ([`specs/010-legal-pages`](specs/010-legal-pages/)) — `/privacy` and `/terms`, required by Google to publish "Sign in with Google" beyond test users
 - ⬜ **Phase 4** — not specified yet, and its scope isn't confirmed (see the candidates in [Roadmap](#roadmap))
 
 ## Roadmap
