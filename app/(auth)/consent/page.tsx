@@ -5,6 +5,18 @@ import { oauthClient } from "@/db/auth-schema";
 import { getSession } from "@/lib/auth";
 import { ConsentForm } from "@/components/auth/ConsentForm";
 
+// A client's name and URI are self-declared at registration (anyone can
+// register one): only ever link to an http(s) address.
+function safeHttpUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 // The consent screen of 011-agent-access-mcp (FR-015, FR-016): Better Auth
 // sends the user here, signed in, when an AI agent asks for access. The query
 // carries the agent's signed authorization request; ConsentForm answers it.
@@ -34,7 +46,7 @@ export default async function ConsentPage({
   return (
     <ConsentForm
       agentName={client?.name?.trim() || "An AI agent"}
-      agentUri={client?.uri ?? null}
+      agentUri={safeHttpUrl(client?.uri)}
       clientId={clientId}
       userName={session.user.name}
       userEmail={session.user.email}

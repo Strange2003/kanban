@@ -50,7 +50,7 @@ export function ConsentForm({
           {agentUri && (
             <>
               {" "}
-              The agent says it is from{" "}
+              The agent says it is from (self-declared, not verified){" "}
               <a href={agentUri} className="underline underline-offset-4" target="_blank" rel="noreferrer noopener">
                 {agentUri}
               </a>

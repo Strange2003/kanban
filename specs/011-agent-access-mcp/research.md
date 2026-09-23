@@ -476,3 +476,60 @@ autorización. Queda cubierto en quickstart § 2.
   agentes conectados (listar y revocar con datos sembrados). El flujo OAuth
   completo con un cliente MCP real es **manual** (quickstart § 2), porque
   depende del asistente del usuario.
+
+---
+
+## Hallazgos de implementación (2026-09-23)
+
+Verificaciones que el plan dejó marcadas como pendientes y lo que se decidió
+al implementar:
+
+1. **Claims del access token**: el JWT trae `sub` (usuario), `azp` y
+   `client_id` (cliente) y `aud` = `[<instancia>/api/mcp, <instancia>/api/auth/oauth2/userinfo]`.
+   `requireMcpAuth` valida la audiencia de `/api/mcp`. Confirmado con un flujo
+   OAuth real contra `next dev`: registro DCR, autorización con PKCE,
+   consentimiento, token y llamadas MCP.
+2. **Descubrimiento en la raíz**: Better Auth sirve sus metadatos bajo
+   `/api/auth`, y el 401 de `/api/mcp` apunta a
+   `/.well-known/oauth-protected-resource/api/mcp`. Hacen falta tres Route
+   Handlers en `app/.well-known/`:
+   - `oauth-protected-resource`: delega en `auth.handler`, porque el plugin
+     `mcp()` responde por el path.
+   - `oauth-authorization-server`: `oauthProviderAuthServerMetadata`.
+   - `openid-configuration`: `oauthProviderOpenIdConfigMetadata`.
+
+   Los tres usan `[[...path]]` para aceptar la variante con y sin el path
+   del emisor.
+3. **Protocolo**: con `legacy: "stateless"`, el cliente oficial
+   `@modelcontextprotocol/client` 2.0 funciona tanto fijado en 2026-07-28
+   como con la negociación por defecto (2025-11-25). El contexto de actor
+   (`AsyncLocalStorage`) llega a los handlers de las herramientas en ambos
+   casos.
+4. **CLI de Better Auth**: `@better-auth/cli` (1.4.x) quedó obsoleta. La
+   CLI actual es el paquete `auth`, que no resuelve el alias `@/` de
+   `tsconfig`. Por eso los plugins viven en `lib/auth-plugins.ts`, sin
+   alias, y `npm run auth:generate` lee `db/auth-schema.config.ts`, una
+   config mínima que solo sirve para generar el esquema.
+5. **Dos migraciones en vez de una**: `drizzle-kit generate` pregunta de
+   forma interactiva si `assignee_user_id` es un rename de `stakeholder`.
+   Para evitarlo:
+   - `0005_agent_access_assignee` agrega todo, incluida la FK editada a mano.
+   - `0006_drop_stakeholder` solo elimina la columna.
+
+   Se aplican juntas. La rama `dev` de Neon corre Postgres 18.
+6. **`redirect_uri` de clientes nativos**: Better Auth exige `https` salvo en
+   `localhost` para clientes `web`. Los clientes MCP de escritorio se
+   registran como `native` con `http://localhost:<puerto>/…`, que es lo que
+   hacen Claude Code y Claude Desktop.
+7. **Reanudar tras el login**: `oauthProviderClient()` agrega la consulta
+   firmada a `signIn.email`. Better Auth responde `{ redirect: true, url }` y
+   navega solo. La página `/sign-in` ya no hace `router.push("/")` en ese
+   caso. Verificado en el navegador: autorizar sin sesión → `/sign-in` →
+   `/consent` → Allow/Deny → callback con `code` o `error=access_denied`.
+   El login con Google dentro del flujo queda para la validación manual
+   (quickstart § 2), porque requiere una cuenta real de Google.
+8. **Lote con asignado inválido**: además de la FK, `createWorkItems` valida
+   antes de la transacción que cada asignado sea miembro, y así puede
+   reportar `BATCH_ITEM_INVALID` con el índice (FR-029).
+9. **Herramientas**: son 16 (5 de lectura, 6 de Work Items y 5 de
+   columnas), no 17 como decía el borrador del plan.

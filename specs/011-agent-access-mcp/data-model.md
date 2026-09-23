@@ -125,6 +125,11 @@ Auth y complica sus actualizaciones.
 
 ## Migración `0005`
 
+> **Al implementar**: son dos archivos, `0005_agent_access_assignee` (todo lo
+> de abajo salvo el paso 3) y `0006_drop_stakeholder` (paso 3). Así se evita
+> la pregunta interactiva de drizzle-kit sobre si la columna nueva es un
+> rename de `stakeholder` (research.md § Hallazgos de implementación).
+
 Una sola migración, generada con `npm run auth:generate` y después
 `npm run db:generate`, con una edición manual:
 

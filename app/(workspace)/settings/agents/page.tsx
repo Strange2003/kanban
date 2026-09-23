@@ -1,9 +1,13 @@
+import { connection } from "next/server";
 import { listConnectedAgents } from "@/lib/actions/agents";
 import { MCP_RESOURCE } from "@/lib/mcp/config";
 import { ConnectedAgentsList } from "@/components/settings/ConnectedAgentsList";
 
 // Settings → Connected agents (Historia 5 of 011-agent-access-mcp, FR-035/FR-036).
 export default async function ConnectedAgentsPage() {
+  // Per-user and per-request: opt out of prerendering before reading the
+  // session (runAction would otherwise swallow Next's dynamic-usage signal).
+  await connection();
   const result = await listConnectedAgents();
   if (!result.ok) throw new Error(result.error.message);
 

@@ -145,7 +145,7 @@ funcionales y 12 criterios de éxito. Toca:
 - 2 páginas nuevas (consentimiento y agentes conectados).
 - ~7 componentes existentes y 4 nuevos.
 - 1 migración.
-- 17 herramientas MCP.
+- 16 herramientas MCP.
 
 ## Constitution Check
 
@@ -182,7 +182,7 @@ cinco cosas:
    cuenta.
 3. Ningún helper sin control de acceso queda exportado desde un archivo
    `"use server"`.
-4. Las 17 herramientas MCP mapean 1:1 a acciones existentes o nuevas y
+4. Las 16 herramientas MCP mapean 1:1 a acciones existentes o nuevas y
    ninguna es de administración.
 5. Los eventos de actividad existentes no cambian de forma.
 
@@ -197,7 +197,7 @@ specs/011-agent-access-mcp/
 ├── data-model.md        # Phase 1 — work_items, work_item_activity, notifications, tablas OAuth, agent_last_used, migración 0005
 ├── quickstart.md        # Phase 1 — validación de las 5 historias (incluido el flujo OAuth manual)
 ├── contracts/
-│   ├── mcp-tools.md     # POST /api/mcp: transporte, autorización, errores, identificadores, 17 herramientas
+│   ├── mcp-tools.md     # POST /api/mcp: transporte, autorización, errores, identificadores, 16 herramientas
 │   └── app-changes.md   # actor, logActivity, acciones modificadas/nuevas, agentes conectados, UI
 ├── checklists/
 │   └── requirements.md
@@ -229,7 +229,7 @@ lib/
 ├── work-item-view.ts                 # MODIFICADO (puro): filtro/orden assignee, − stakeholder
 ├── mcp/
 │   ├── config.ts                     # NUEVO: MCP_RESOURCE derivado de BETTER_AUTH_URL
-│   ├── server.ts                     # NUEVO: createMcpHandler + registro de las 17 herramientas
+│   ├── server.ts                     # NUEVO: createMcpHandler + registro de las 16 herramientas
 │   ├── tools/{read,work-items,columns}.ts  # NUEVO: cada herramienta = zod input → Server Action → resultado
 │   ├── resolve.ts                    # NUEVO: PREFIX-N / columnId → ids internos, dentro del proyecto
 │   ├── search.ts                     # NUEVO (puro): filtros + paginación de search_work_items
