@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
-import { stages, workItems, workItemActivity } from "@/db/schema";
+import { stages, workItems } from "@/db/schema";
+import { logActivity } from "@/lib/activity";
 import { requireProjectMember, requireProjectPermission } from "@/lib/permissions";
 import { generatePublicId } from "@/lib/ids";
 import { AppError, runAction, type Result } from "@/lib/errors";
@@ -202,7 +203,7 @@ export async function setStageClosing(input: {
 
       // Estándares de Producto y Datos § Auditoría: one event per Work Item, in one insert.
       if (affected.length > 0) {
-        await tx.insert(workItemActivity).values(
+        await logActivity(tx, 
           affected.map(({ id }) =>
             input.isClosing
               ? {

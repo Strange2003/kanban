@@ -81,7 +81,7 @@ const baseWorkItem = {
   displayNumber: 3,
   title: "T",
   description: null,
-  stakeholder: null,
+  assigneeUserId: null,
   position: 0,
   parentWorkItemId: null,
   priority: null,

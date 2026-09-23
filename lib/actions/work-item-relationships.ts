@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { and, asc, eq, or, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { workItems, workItemRelatedLinks, workItemActivity, stages, areas, iterations } from "@/db/schema";
+import { logActivity } from "@/lib/activity";
 import { requireProjectMember, requireProjectPermission } from "@/lib/permissions";
 import { AppError, runAction, type Result } from "@/lib/errors";
 import type { ProjectRole } from "@/lib/roles";
@@ -159,7 +160,7 @@ export async function setWorkItemParent(input: {
         .where(eq(workItems.id, workItem.id));
 
       // Estándares de Producto y Datos § Auditoría de la constitución.
-      await tx.insert(workItemActivity).values({
+      await logActivity(tx, {
         workItemId: workItem.id,
         type: "parent_linked",
         payload: { parentWorkItemId: parentWorkItem.id },
@@ -194,7 +195,7 @@ export async function removeWorkItemParent(
         .set({ parentWorkItemId: null, updatedAt: new Date() })
         .where(eq(workItems.id, workItem.id));
 
-      await tx.insert(workItemActivity).values({
+      await logActivity(tx, {
         workItemId: workItem.id,
         type: "parent_unlinked",
         payload: { previousParentWorkItemId },
@@ -246,7 +247,7 @@ export async function linkRelatedWorkItems(input: {
       // No row created => the link already existed (FR-006) — don't log it again.
       if (!created) return;
 
-      await tx.insert(workItemActivity).values([
+      await logActivity(tx, [
         {
           workItemId: workItemIdA,
           type: "related_linked",
@@ -294,7 +295,7 @@ export async function unlinkRelatedWorkItems(input: {
 
       if (deleted.length === 0) return;
 
-      await tx.insert(workItemActivity).values([
+      await logActivity(tx, [
         {
           workItemId: workItemIdA,
           type: "related_unlinked",

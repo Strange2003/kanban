@@ -1,0 +1,1 @@
+ALTER TABLE "work_items" DROP COLUMN "stakeholder";

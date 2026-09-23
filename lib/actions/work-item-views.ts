@@ -2,7 +2,8 @@
 
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { workItems, stages, areas, iterations, tags, workItemTags } from "@/db/schema";
+import { workItems, stages, areas, iterations, tags, workItemTags, projectMembers } from "@/db/schema";
+import { user } from "@/db/auth-schema";
 import { requireProjectMember } from "@/lib/permissions";
 import { runAction, type Result } from "@/lib/errors";
 import { listCatalog } from "@/lib/work-item-catalogs";
@@ -14,6 +15,8 @@ export type WorkItemsViewData = {
   options: WorkItemViewOptions;
   role: ProjectRole;
   totalCount: number;
+  // Resolves the "Assigned to me" filter (011-agent-access-mcp FR-008).
+  currentUserId: string;
 };
 
 /**
@@ -25,7 +28,7 @@ export type WorkItemsViewData = {
  */
 export async function getWorkItemsView(projectPublicId: string): Promise<Result<WorkItemsViewData>> {
   return runAction(async () => {
-    const { project, membership } = await requireProjectMember(projectPublicId);
+    const { actor, project, membership } = await requireProjectMember(projectPublicId);
 
     const itemRows = await db
       .select({
@@ -36,11 +39,14 @@ export async function getWorkItemsView(projectPublicId: string): Promise<Result<
         isClosed: stages.isClosing,
         areaName: areas.name,
         iterationName: iterations.name,
+        assigneeName: user.name,
+        assigneeImage: user.image,
       })
       .from(workItems)
       .innerJoin(stages, eq(stages.id, workItems.stageId))
       .leftJoin(areas, eq(areas.id, workItems.areaId))
       .leftJoin(iterations, eq(iterations.id, workItems.iterationId))
+      .leftJoin(user, eq(user.id, workItems.assigneeUserId))
       .where(eq(workItems.projectId, project.id))
       .orderBy(asc(workItems.displayNumber));
 
@@ -60,7 +66,7 @@ export async function getWorkItemsView(projectPublicId: string): Promise<Result<
       .where(eq(stages.projectId, project.id))
       .orderBy(asc(stages.position));
 
-    const [catalogAreas, catalogIterations, catalogTags] = await Promise.all([
+    const [catalogAreas, catalogIterations, catalogTags, memberRows] = await Promise.all([
       listCatalog("area", project.id),
       listCatalog("iteration", project.id),
       db
@@ -68,6 +74,12 @@ export async function getWorkItemsView(projectPublicId: string): Promise<Result<
         .from(tags)
         .where(eq(tags.projectId, project.id))
         .orderBy(asc(tags.name)),
+      db
+        .select({ userId: projectMembers.userId, name: user.name, image: user.image })
+        .from(projectMembers)
+        .innerJoin(user, eq(user.id, projectMembers.userId))
+        .where(eq(projectMembers.projectId, project.id))
+        .orderBy(asc(user.name)),
     ]);
 
     const rows: WorkItemViewRow[] = itemRows.map(({ item, ...joined }) => ({
@@ -85,7 +97,10 @@ export async function getWorkItemsView(projectPublicId: string): Promise<Result<
       areaName: joined.areaName,
       iterationName: joined.iterationName,
       tags: (tagsByItem.get(item.id) ?? []).sort((a, b) => a.localeCompare(b)),
-      stakeholder: item.stakeholder,
+      assignee:
+        item.assigneeUserId !== null
+          ? { userId: item.assigneeUserId, name: joined.assigneeName ?? "Unknown", image: joined.assigneeImage }
+          : null,
       startDate: item.startDate,
       targetDate: item.targetDate,
       createdAt: item.createdAt,
@@ -99,9 +114,11 @@ export async function getWorkItemsView(projectPublicId: string): Promise<Result<
         areas: catalogAreas,
         iterations: catalogIterations,
         tags: catalogTags.map((t) => t.name),
+        members: memberRows,
       },
       role: membership.role,
       totalCount: rows.length,
+      currentUserId: actor.userId,
     };
   });
 }

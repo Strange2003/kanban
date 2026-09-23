@@ -98,8 +98,8 @@ describe("setStageClosing", () => {
     const inserts = fake.writes.filter((w) => w.table === "work_item_activity");
     expect(inserts).toHaveLength(1);
     expect(inserts[0]?.values).toEqual([
-      { workItemId: 10, type: "closed", payload: { closedAt: closedAt.toISOString(), stageName: "Done", via: "stage_marked" } },
-      { workItemId: 11, type: "closed", payload: { closedAt: closedAt.toISOString(), stageName: "Done", via: "stage_marked" } },
+      { workItemId: 10, type: "closed", actorUserId: "u1", agentClientId: null, agentName: null, payload: { closedAt: closedAt.toISOString(), stageName: "Done", via: "stage_marked" } },
+      { workItemId: 11, type: "closed", actorUserId: "u1", agentClientId: null, agentName: null, payload: { closedAt: closedAt.toISOString(), stageName: "Done", via: "stage_marked" } },
     ]);
   });
 
@@ -111,7 +111,7 @@ describe("setStageClosing", () => {
 
     expect(fake.writes.find((w) => w.table === "work_items")?.values).toMatchObject({ closedAt: null });
     expect(fake.writes.find((w) => w.table === "work_item_activity")?.values).toEqual([
-      { workItemId: 10, type: "reopened", payload: { stageName: "Done", via: "stage_unmarked" } },
+      { workItemId: 10, type: "reopened", actorUserId: "u1", agentClientId: null, agentName: null, payload: { stageName: "Done", via: "stage_unmarked" } },
     ]);
   });
 });

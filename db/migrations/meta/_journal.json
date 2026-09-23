@@ -36,6 +36,20 @@
       "when": 1790118235857,
       "tag": "0004_slippery_inhumans",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790141743714,
+      "tag": "0005_agent_access_assignee",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790141752044,
+      "tag": "0006_drop_stakeholder",
+      "breakpoints": true
     }
   ]
 }

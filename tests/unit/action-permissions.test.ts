@@ -94,6 +94,7 @@ vi.mock("@/db/client", async () => {
 import { createStage, reorderStages, renameStage, deleteStage, setStageClosing } from "@/lib/actions/board";
 import {
   createWorkItem,
+  createWorkItems,
   moveWorkItem,
   reorderWorkItemsInStage,
   updateWorkItem,
@@ -146,6 +147,8 @@ export const CASES: Case[] = [
 
   // --- workItem:edit (lib/actions/work-items.ts)
   { action: "createWorkItem", permission: "workItem:edit", run: () => createWorkItem({ stagePublicId: "stage-1", title: "New" }), denied: READ_ONLY_DENIED, allowed: EDITORS },
+  // 011-agent-access-mcp FR-029: batch creation, used by AI agents.
+  { action: "createWorkItems", permission: "workItem:edit", run: () => createWorkItems({ stagePublicId: "stage-1", items: [{ title: "A" }, { title: "B", assigneeUserId: "someone" }] }), denied: READ_ONLY_DENIED, allowed: EDITORS },
   { action: "moveWorkItem", permission: "workItem:edit", run: () => moveWorkItem({ workItemId: 1, toStageId: 1, toPosition: 0 }), denied: READ_ONLY_DENIED, allowed: EDITORS },
   { action: "reorderWorkItemsInStage", permission: "workItem:edit", run: () => reorderWorkItemsInStage({ stageId: 1, orderedWorkItemIds: [1] }), denied: READ_ONLY_DENIED, allowed: EDITORS },
   { action: "updateWorkItem", permission: "workItem:edit", run: () => updateWorkItem({ workItemId: 1, title: "Edited", tagNames: ["new-tag"], priority: "high", severity: "low", areaName: "Frontend", iterationName: "Sprint 1", startDate: "2026-10-01", targetDate: "2026-10-15" }), denied: READ_ONLY_DENIED, allowed: EDITORS },

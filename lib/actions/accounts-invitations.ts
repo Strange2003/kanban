@@ -31,7 +31,7 @@ export async function sendInvitation(input: {
   role: AssignableRole;
 }): Promise<Result<typeof invitations.$inferSelect>> {
   return runAction(async () => {
-    const { session, project } = await requireProjectPermission(input.projectPublicId, "invitation:send");
+    const { actor, project } = await requireProjectPermission(input.projectPublicId, "invitation:send");
 
     const parsed = sendInvitationSchema.safeParse({ email: input.email });
     if (!parsed.success) {
@@ -49,7 +49,7 @@ export async function sendInvitation(input: {
     const [recentCount] = await db
       .select({ count: sql<number>`count(*)`.mapWith(Number) })
       .from(invitations)
-      .where(and(eq(invitations.invitedByUserId, session.user.id), gte(invitations.createdAt, oneHourAgo)));
+      .where(and(eq(invitations.invitedByUserId, actor.userId), gte(invitations.createdAt, oneHourAgo)));
     if ((recentCount?.count ?? 0) >= RATE_LIMIT_MAX_PER_HOUR) {
       throw new AppError("RATE_LIMITED", "You've sent too many invitations. Try again in a bit.");
     }
@@ -83,7 +83,7 @@ export async function sendInvitation(input: {
         publicId: generatePublicId(),
         projectId: project.id,
         invitedEmail: email,
-        invitedByUserId: session.user.id,
+        invitedByUserId: actor.userId,
         role,
         status: "pending",
       })
@@ -163,7 +163,7 @@ export async function cancelInvitation(input: {
   invitationId: string;
 }): Promise<Result<void>> {
   return runAction(async () => {
-    const { session, project, membership } = await requireProjectPermission(
+    const { actor, project, membership } = await requireProjectPermission(
       input.projectPublicId,
       "invitation:cancelOwn",
     );
@@ -174,7 +174,7 @@ export async function cancelInvitation(input: {
       .where(and(eq(invitations.publicId, input.invitationId), eq(invitations.projectId, project.id)))
       .limit(1);
     if (!invitation) throw new AppError("NOT_FOUND", "Invitation not found.");
-    if (invitation.invitedByUserId !== session.user.id && !can(membership.role, "invitation:cancelAny")) {
+    if (invitation.invitedByUserId !== actor.userId && !can(membership.role, "invitation:cancelAny")) {
       throw new AppError("ROLE_NOT_PERMITTED", "Only the sender or the project owner can cancel this invitation.");
     }
     if (invitation.status !== "pending") {

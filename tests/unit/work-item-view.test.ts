@@ -33,7 +33,7 @@ function row(over: Partial<WorkItemViewRow> = {}): WorkItemViewRow {
     areaName: null,
     iterationName: null,
     tags: [],
-    stakeholder: null,
+    assignee: null,
     startDate: null,
     targetDate: null,
     createdAt: new Date("2026-09-01T00:00:00Z"),
