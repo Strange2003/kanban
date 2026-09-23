@@ -71,9 +71,9 @@ dirección (FR-009), con este formato:
 | Parámetro | Valor | Ejemplo |
 |---|---|---|
 | `status` | `open` \| `closed` | `status=open` |
-| `stage` | `publicId`s de columnas, separados por coma | `stage=abc123,def456` |
-| `priority`, `severity` | niveles de 008 y/o `none`, separados por coma | `priority=critical,high` |
-| `area`, `iteration`, `tag` | nombres, y/o `none`, separados por coma (codificados) | `iteration=Sprint%2012` |
+| `stage` | `publicId` de una columna; parámetro repetido para varias | `stage=abc123&stage=def456` |
+| `priority`, `severity` | un nivel de 008 o `none`; repetido para varios | `priority=critical&priority=high` |
+| `area`, `iteration`, `tag` | un nombre o `none`; repetido para varios | `iteration=Sprint%2012` |
 | `overdue` | `1` | `overdue=1` |
 | `q` | texto libre | `q=login` |
 | `sort`, `dir` | columna ordenable, `asc` \| `desc` (solo Tabla) | `sort=priority&dir=desc` |
@@ -85,7 +85,7 @@ integra con `useSearchParams` (guía
 página al servidor. Se usa `replaceState` y no `pushState` para que "atrás"
 desde la vista vuelva a la pantalla anterior y no deshaga filtro por filtro.
 Desde el detalle, "atrás" vuelve a la dirección con los filtros, que es lo
-que pide FR-003. Un parámetro inválido se ignora (Edge Cases).
+que pide FR-003. Un parámetro inválido se ignora (Edge Cases). Los filtros de varios valores repiten el parámetro en vez de separar por comas, porque los nombres son texto libre y pueden contener comas (decidido al implementar).
 
 **Rationale**: Una dirección que describe la vista es la forma más simple de
 cumplir FR-009, SC-003 y SC-005 a la vez, sin guardar nada. Las columnas se

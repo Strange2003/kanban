@@ -3,9 +3,9 @@
 An open-source, self-hostable Kanban board for personal and team projects — accounts, unlimited collaborators per project, and a fast, drag-and-drop board. Free to run yourself, forever.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Status: Phase 3 in progress](https://img.shields.io/badge/status-phase%203%20in%20progress-blue)](specs/)
+[![Status: Phase 3 complete](https://img.shields.io/badge/status-phase%203%20complete-brightgreen)](specs/)
 
-> **Project status**: **Phases 1 and 2 are implemented, and Phase 3 is under way** — accounts, invitations, projects, the Kanban board, Work Items, their relationships, a dedicated detail view, per-project roles (Owner / Member / Viewer) and, from Phase 3, extended Work Item fields (priority, severity, area, iteration, dates) with closing columns all work end-to-end against a real Postgres (Neon) database in local development; no instance has been deployed yet. See [Project Status](#project-status) for what's next.
+> **Project status**: **Phases 1, 2 and 3 are implemented** — accounts, invitations, projects, the Kanban board, Work Items, their relationships, a dedicated detail view, per-project roles (Owner / Member / Viewer) and, from Phase 3, extended Work Item fields (priority, severity, area, iteration, dates) with closing columns plus List and Table views all work end-to-end against a real Postgres (Neon) database in local development; no instance has been deployed yet. See [Project Status](#project-status) for what's next.
 
 ## Why this project exists
 
@@ -19,6 +19,7 @@ Existing self-hostable alternatives (Kan.bn, Kaneo, Vikunja, Planka, WeKan, Kanb
 - **Projects**: the top-level container. A project is automatically classified as **Personal** (1 member) or **Shared** (2+ members) — you never set this manually, it's derived from who's on the project.
 - **Unlimited collaborators**: invite anyone by email, no cap on project members, ever. That's a non-negotiable product principle, not a pricing tier.
 - **Roles**: every member is an **Owner** (exactly one per project — manages the project and its members, and can transfer ownership), a **Member** (edits everything and can invite) or a **Viewer** (read-only). Whoever invites picks the role; the owner can change it later.
+- **Views**: every project can be seen as a **Board** (the Kanban, the main view), a **List** (a collapsible parent/child backlog) or a **Table** (every field, sortable and filterable — filters live in the URL, so a filtered view can be shared). List and Table are read-only; editing happens on the board and in a Work Item's detail view.
 - **Board**: each project has one Kanban board. Columns and "stages" are the same thing — create/rename/delete/reorder columns freely, all via drag-and-drop. Any column can be marked as a **closing column** (e.g. "Done"): Work Items in it are closed.
 - **Work Items**: the cards on the board. Each gets a short, human-readable ID (e.g. `KAN-42`), a title, description, stakeholder, and tags from a per-project catalog; plus priority and severity (Critical / High / Medium / Low), an area and an iteration from per-project catalogs, and optional start and target dates. A Work Item records when it was created, last modified and closed — it closes when it enters a closing column (by dragging, or with its "Close" button) and reopens when it leaves; a past target date on an open Work Item shows as overdue.
 
@@ -113,7 +114,7 @@ This project follows **Spec-Driven Development**: every feature is specified, cl
 - ✅ **Project constitution** ratified ([`.specify/memory/constitution.md`](.specify/memory/constitution.md))
 - ✅ **Phase 1 (MVP core)** fully specified, planned, and **implemented** — 121/121 tasks done across [`specs/001-accounts-invitations`](specs/001-accounts-invitations/), including P1 (MVP), P2/P3 (invitations, project/board/Work Item management), and Polish (loading states, error boundary, accessibility, unit tests)
 - ✅ **Phase 2 (depth)** — Work Item relationships ([`specs/005-work-item-relationships`](specs/005-work-item-relationships/)), the Work Item detail view ([`specs/006-work-item-detail-view`](specs/006-work-item-detail-view/)) and roles & permissions ([`specs/007-roles-permissions`](specs/007-roles-permissions/)) **implemented**, with the full unit and end-to-end suites green; the manual end-to-end pass of 007's `quickstart.md` (T057) is still open
-- 🚧 **Phase 3 (planning & views)** — confirmed in scope: extended fields, and list and table views (a calendar view is out of scope for now). Extended Work Item fields and closing columns ([`specs/008-work-item-fields`](specs/008-work-item-fields/)) **implemented**, with the unit and end-to-end suites green; the list and table views (009) are next
+- ✅ **Phase 3 (planning & views)** — extended Work Item fields and closing columns ([`specs/008-work-item-fields`](specs/008-work-item-fields/)) and the List and Table views ([`specs/009-work-item-views`](specs/009-work-item-views/)) **implemented**, with the unit and end-to-end suites green (a calendar view is deferred); the manual quickstart passes of 008 (T052) and 009 (T028) are still open
 - ⬜ **Deployment** — nothing is deployed yet (no Render service). All migrations (`0000`-`0004`) are applied to the development Neon database
 
 ## Roadmap
@@ -129,8 +130,8 @@ This project follows **Spec-Driven Development**: every feature is specified, cl
 6. Work Item detail view ✅ *done*
 7. Roles & permissions ✅ *done*
 
-**Phase 3 — Planning & views** 🚧 *in progress*
-8. Additional views: list and table *(next — 009; a calendar view is deferred)*
+**Phase 3 — Planning & views** ✅ *done*
+8. Additional views: list and table ✅ *done* *(a calendar view is deferred)*
 9. Extended fields (priority, severity, area, iteration, dates, closing columns) ✅ *done*
 
 ## Contributing

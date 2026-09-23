@@ -15,7 +15,7 @@ export function TargetDateChip({ targetDate, closedAt }: { targetDate: string; c
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] leading-none",
+        "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] leading-none whitespace-nowrap",
         overdue ? "bg-destructive/10 font-medium text-destructive" : "text-muted-foreground",
       )}
       data-testid="target-date-chip"

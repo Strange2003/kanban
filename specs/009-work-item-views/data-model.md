@@ -74,6 +74,7 @@ Reglas de validación de `parseViewQuery`:
 - Las comparaciones de nombres de área, iteración y tag no distinguen
   mayúsculas, igual que los catálogos de 004 y 008.
 - Los valores repetidos se deduplican.
+- Los filtros de varios valores repiten el parámetro (`tag=a&tag=b`); no se separan por comas, porque los nombres pueden contenerlas.
 
 Semántica de filtros (FR-007):
 

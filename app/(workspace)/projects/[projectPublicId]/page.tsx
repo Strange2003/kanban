@@ -1,10 +1,8 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
-import Link from "next/link";
-import { Settings } from "lucide-react";
 import { getBoard } from "@/lib/actions/board";
 import { Board } from "@/components/board/Board";
-import { ReadOnlyNotice } from "@/components/ui/read-only-notice";
-import { can } from "@/lib/roles";
+import { ProjectViewHeader } from "@/components/views/ProjectViewHeader";
 
 export default async function ProjectBoardPage({
   params,
@@ -21,16 +19,10 @@ export default async function ProjectBoardPage({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex items-center justify-between border-b border-border px-4 py-2">
-        {can(result.data.role, "board:edit") ? <span /> : <ReadOnlyNotice role={result.data.role} />}
-        <Link
-          href={`/projects/${projectPublicId}/settings`}
-          aria-label="Project settings"
-          className="hover:bg-accent hover:text-accent-foreground inline-flex h-9 w-9 items-center justify-center rounded-md"
-        >
-          <Settings className="h-4 w-4" />
-        </Link>
-      </div>
+      {/* 009-work-item-views: the Board / List / Table switcher, shared by the three views. */}
+      <Suspense>
+        <ProjectViewHeader projectPublicId={projectPublicId} role={result.data.role} active="board" />
+      </Suspense>
       <Board
         projectPublicId={projectPublicId}
         role={result.data.role}

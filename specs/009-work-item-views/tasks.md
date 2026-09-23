@@ -67,15 +67,15 @@ dirección.
 **⚠️ CRITICAL**: ninguna historia de usuario puede empezar hasta completar
 esta fase.
 
-- [ ] T001 Crear `lib/work-item-view.ts` (módulo **puro**: sin imports de `db`, `next/*` ni `lib/auth`) con:
+- [X] T001 Crear `lib/work-item-view.ts` (módulo **puro**: sin imports de `db`, `next/*` ni `lib/auth`) con:
   - Los tipos `WorkItemViewRow`, `WorkItemViewOptions`, `ViewQuery`, `SortKey` y `WorkItemTreeNode`, exactamente como en data-model.md.
   - `DEFAULT_VIEW_QUERY` (`status: null`, listas vacías, `overdue: false`, `q: ""`, `sort: "id"`, `dir: "asc"`).
-  - `parseViewQuery(params: URLSearchParams, validStagePublicIds: ReadonlySet<string>)`: reglas de data-model.md § Consulta de vista. Valores separados por coma; descarta sin error un `status`, `sort`, `dir`, nivel o columna desconocidos; deduplica; recorta `q`. Los niveles aceptan los de `WORK_ITEM_LEVELS` más `"none"`.
+  - `parseViewQuery(params: URLSearchParams, validStagePublicIds: ReadonlySet<string>)`: reglas de data-model.md § Consulta de vista. Valores múltiples como parámetro repetido (`tag=a&tag=b`, research.md); descarta sin error un `status`, `sort`, `dir`, nivel o columna desconocidos; deduplica; recorta `q`. Los niveles aceptan los de `WORK_ITEM_LEVELS` más `"none"`.
   - `serializeViewQuery(query, view)`: sin `?`; omite todo valor por defecto; con `view === "list"` omite `sort` y `dir`; orden de parámetros estable.
   - `hasActiveFilters(query)`: `true` si cualquier filtro difiere del valor por defecto, sin contar `sort`/`dir`.
 
   Cubre FR-007 y FR-009 (contracts/work-item-views.md § Módulo puro).
-- [ ] T002 En `lib/work-item-view.ts`, agregar `filterWorkItems(rows, query, today)` según data-model.md § Semántica de filtros:
+- [X] T002 En `lib/work-item-view.ts`, agregar `filterWorkItems(rows, query, today)` según data-model.md § Semántica de filtros:
   - Distintos filtros se combinan con **Y** y los valores de un mismo filtro con **O**.
   - `"none"` coincide con un campo vacío, y para tags con `tags.length === 0`.
   - Área, iteración y tag se comparan sin distinguir mayúsculas.
@@ -85,7 +85,7 @@ esta fase.
   - Con `query.overdue && today === null` devuelve `[]` (research.md § "Vencido").
 
   Cubre FR-007 y FR-010.
-- [ ] T003 En `lib/work-item-view.ts`, agregar `sortWorkItems(rows, sort, dir)`:
+- [X] T003 En `lib/work-item-view.ts`, agregar `sortWorkItems(rows, sort, dir)`:
   - No muta la entrada.
   - `priority` y `severity` se ordenan por el índice en `WORK_ITEM_LEVELS`.
   - `stage` se ordena por `stagePosition`.
@@ -97,7 +97,7 @@ esta fase.
   - El desempate es siempre `displayNumber` ascendente.
 
   Cubre FR-006 y Edge Cases.
-- [ ] T004 En `lib/work-item-view.ts`, agregar `buildWorkItemTree(rows, matchingIds)` según research.md § El árbol de la Lista y data-model.md § Nodo de árbol:
+- [X] T004 En `lib/work-item-view.ts`, agregar `buildWorkItemTree(rows, matchingIds)` según research.md § El árbol de la Lista y data-model.md § Nodo de árbol:
   - Son raíces los Work Items sin `parentId` o cuyo padre no está en `rows`.
   - Los hermanos se ordenan por `displayNumber` ascendente.
   - `childCount` cuenta los hijos directos en `rows` completo.
@@ -106,14 +106,14 @@ esta fase.
   - Cada Work Item aparece como mucho una vez (SC-006).
 
   Cubre FR-012 y FR-015.
-- [ ] T005 [P] Tests unitarios en `tests/unit/work-item-view.test.ts` para `parseViewQuery` y `serializeViewQuery`:
+- [X] T005 [P] Tests unitarios en `tests/unit/work-item-view.test.ts` para `parseViewQuery` y `serializeViewQuery`:
   - La ida y vuelta conserva la consulta.
   - Los defaults se omiten (`serializeViewQuery(DEFAULT_VIEW_QUERY, "table") === ""`).
-  - `sort=bogus&dir=up&status=maybe&priority=urgent,high&stage=unknown,<valido>` conserva solo `priority=high` y el stage válido.
+  - `sort=bogus&dir=up&status=maybe&priority=urgent&priority=high&stage=unknown&stage=<valido>` conserva solo `priority=high` y el stage válido.
   - Los valores repetidos se deduplican.
   - `"list"` omite `sort`/`dir`.
   - Los nombres con espacios y comas se codifican y decodifican bien.
-- [ ] T006 [P] Tests unitarios en `tests/unit/work-item-view.test.ts` para `filterWorkItems` y `sortWorkItems`:
+- [X] T006 [P] Tests unitarios en `tests/unit/work-item-view.test.ts` para `filterWorkItems` y `sortWorkItems`:
   - Cada filtro por separado, incluido `"none"` para prioridad, área y tags.
   - Combinaciones con Y entre filtros y con O dentro de uno.
   - `q` por título y por displayId en minúsculas.
@@ -122,14 +122,14 @@ esta fase.
   - `stage` por posición y no por nombre.
   - Desempate por `displayNumber`.
   - La entrada no se muta.
-- [ ] T007 [P] Tests unitarios en `tests/unit/work-item-view.test.ts` para `buildWorkItemTree`:
+- [X] T007 [P] Tests unitarios en `tests/unit/work-item-view.test.ts` para `buildWorkItemTree`:
   - Padre → dos hijos → nieto, más un suelto: forma y orden correctos.
   - Un huérfano cuyo padre no está en `rows` sale como raíz.
   - Con `matchingIds = {nieto}`: nieto con padre y abuelo `isContext: true`, sin hermanos ni suelto.
   - `childCount` refleja los hijos reales aunque el filtro oculte alguno.
   - Un ciclo artificial (A→B→A) no cuelga y cada nodo sale una vez.
   - Con 500 filas encadenadas, todas aparecen exactamente una vez (SC-006).
-- [ ] T008 Crear `lib/actions/work-item-views.ts` (`"use server"`, **un solo export**) con `getWorkItemsView(projectPublicId)` según contracts/work-item-views.md:
+- [X] T008 Crear `lib/actions/work-item-views.ts` (`"use server"`, **un solo export**) con `getWorkItemsView(projectPublicId)` según contracts/work-item-views.md:
   1. `requireProjectMember` primero.
   2. Una consulta de `work_items` con `innerJoin(stages)` y `leftJoin(areas)`/`leftJoin(iterations)`, `WHERE work_items.project_id = project.id`.
   3. Una consulta de tags: `work_item_tags ⋈ tags WHERE tags.project_id = project.id`, agrupados en memoria por Work Item y ordenados alfabéticamente.
@@ -137,16 +137,16 @@ esta fase.
   5. Los catálogos completos: `listCatalog("area" | "iteration")` de `@/lib/work-item-catalogs`, y los tags del proyecto por nombre.
 
   Devuelve `{ rows, options, role, totalCount }`. `displayId` es `<workItemPrefix>-<displayNumber>` e `isClosed` es `stages.isClosing`. No expone ids internos de columnas ni catálogos (FR-004, SC-004).
-- [ ] T009 [P] Tests unitarios en `tests/unit/work-item-views-action.test.ts`, con el mismo patrón de fake `db` por tabla que `tests/unit/board.test.ts`:
+- [X] T009 [P] Tests unitarios en `tests/unit/work-item-views-action.test.ts`, con el mismo patrón de fake `db` por tabla que `tests/unit/board.test.ts`:
   - Sin sesión → `UNAUTHENTICATED` sin consultas de Work Items.
   - Un no miembro → `FORBIDDEN`.
   - Un miembro recibe filas con `displayId`, `stageName`, `isClosed`, `areaName` y `tags` armados.
   - `totalCount === rows.length`.
-- [ ] T010 Modificar `tests/unit/action-permissions.test.ts`:
+- [X] T010 Modificar `tests/unit/action-permissions.test.ts`:
   - Importar `* as workItemViewsModule from "@/lib/actions/work-item-views"`.
   - Agregarlo a la lista de módulos del test "every exported Server Action is classified".
   - Agregar `"getWorkItemsView"` a `MEMBERSHIP_ONLY_READS`.
-- [ ] T011 [P] Crear `components/views/useViewQuery.ts` (hook cliente) que devuelve `[query, setQuery]`:
+- [X] T011 [P] Crear `components/views/useViewQuery.ts` (hook cliente) que devuelve `[query, setQuery]`:
   - `query` sale de `parseViewQuery(useSearchParams(), validStagePublicIds)`, memoizado.
   - `setQuery(next)` escribe `window.history.replaceState(null, "", `${pathname}${qs ? `?${qs}` : ""}`)` con `serializeViewQuery(next, view)`.
 
@@ -166,7 +166,7 @@ detalle y "atrás" vuelve a la misma vista. Los no miembros reciben
 
 **Independent Test**: quickstart.md bloques 1 y 5.
 
-- [ ] T012 [P] [F9-US1] Crear `components/views/ProjectViewHeader.tsx` (cliente) según contracts § Componentes:
+- [X] T012 [P] [F9-US1] Crear `components/views/ProjectViewHeader.tsx` (cliente) según contracts § Componentes:
   - Props `projectPublicId`, `role`, `active`.
   - `<nav aria-label="Views">` con tres `Link`: `Board` → `/projects/<id>`, `List` → `/list`, `Table` → `/table`. El activo lleva `aria-current="page"` y estilo de pestaña activa.
   - Los enlaces a List y Table conservan la cadena de consulta actual (`useSearchParams`), sin `sort`/`dir` al ir a List.
@@ -174,17 +174,17 @@ detalle y "atrás" vuelve a la misma vista. Los no miembros reciben
   - El enlace a Ajustes, igual que hoy en `app/(workspace)/projects/[projectPublicId]/page.tsx` (`aria-label="Project settings"`).
 
   Cubre FR-001 y FR-002.
-- [ ] T013 [F9-US1] Modificar `app/(workspace)/projects/[projectPublicId]/page.tsx`: reemplazar el bloque de cabecera (aviso de solo lectura + enlace a Ajustes) por `<ProjectViewHeader projectPublicId role active="board" />`. El `<Board>` no cambia.
-- [ ] T014 [P] [F9-US1] Crear `components/views/ViewEmptyState.tsx`: mensaje "No Work Items yet." (o "This project has no columns yet.") con un enlace "Go to the board" a `/projects/<id>` (Edge Cases). Recibe `projectPublicId` y `reason: "no-items" | "no-columns"`.
-- [ ] T015 [F9-US1] Crear `app/(workspace)/projects/[projectPublicId]/table/page.tsx` (Server Component):
+- [X] T013 [F9-US1] Modificar `app/(workspace)/projects/[projectPublicId]/page.tsx`: reemplazar el bloque de cabecera (aviso de solo lectura + enlace a Ajustes) por `<ProjectViewHeader projectPublicId role active="board" />`. El `<Board>` no cambia.
+- [X] T014 [P] [F9-US1] Crear `components/views/ViewEmptyState.tsx`: mensaje "No Work Items yet." (o "This project has no columns yet.") con un enlace "Go to the board" a `/projects/<id>` (Edge Cases). Recibe `projectPublicId` y `reason: "no-items" | "no-columns"`.
+- [X] T015 [F9-US1] Crear `app/(workspace)/projects/[projectPublicId]/table/page.tsx` (Server Component):
   1. `await params`, luego `getWorkItemsView`.
   2. `NOT_FOUND`/`FORBIDDEN` → `notFound()`; otro error → `throw`, igual que la página del tablero (FR-004).
   3. Renderiza `<ProjectViewHeader active="table">` y, si no hay columnas o Work Items, `<ViewEmptyState>`.
   4. Si hay datos, renderiza `<WorkItemsTable rows options projectPublicId />`, envuelto en `<Suspense>` si la guía de `useSearchParams` lo exige.
 
   Crear `components/views/WorkItemsTable.tsx` en versión mínima: una `<table>` con ID y Title, donde el título es un `Link` a `/projects/<id>/work-items/<displayNumber>` (FR-003). Se completa en US2.
-- [ ] T016 [F9-US1] Crear `app/(workspace)/projects/[projectPublicId]/list/page.tsx`, análoga a T015 con `active="list"` y `<WorkItemsList>`. Crear `components/views/WorkItemsList.tsx` en versión mínima: filas en orden por número, con enlace al detalle. Se completa en US3.
-- [ ] T017 [F9-US1] Crear `tests/e2e/work-item-views.spec.ts` con quickstart.md bloques 1 y 5, reutilizando `tests/e2e/helpers.ts`:
+- [X] T016 [F9-US1] Crear `app/(workspace)/projects/[projectPublicId]/list/page.tsx`, análoga a T015 con `active="list"` y `<WorkItemsList>`. Crear `components/views/WorkItemsList.tsx` en versión mínima: filas en orden por número, con enlace al detalle. Se completa en US3. — *Nota de implementación*: T015 y T016 escribieron directamente las versiones completas de `WorkItemsTable` y `WorkItemsList` (T019, T021) en vez de una versión mínima intermedia, porque la página era la misma en ambos casos.
+- [X] T017 [F9-US1] Crear `tests/e2e/work-item-views.spec.ts` con quickstart.md bloques 1 y 5, reutilizando `tests/e2e/helpers.ts`:
   1. Desde el tablero, pasar a Table y a List con el selector (URL `/table` y `/list`, `aria-current` en el activo).
   2. Recargar y seguir en la misma vista.
   3. Abrir un Work Item desde la Tabla y volver con `page.goBack()` a `/table`.
@@ -202,7 +202,7 @@ lectura.
 
 **Independent Test**: quickstart.md bloques 2 y 4.
 
-- [ ] T018 [P] [F9-US2] Crear `components/views/ViewFilters.tsx` (cliente) según contracts § Componentes. Props: `query`, `onChange(next: ViewQuery)`, `options`, `shownCount`, `totalCount`. Controles:
+- [X] T018 [P] [F9-US2] Crear `components/views/ViewFilters.tsx` (cliente) según contracts § Componentes. Props: `query`, `onChange(next: ViewQuery)`, `options`, `shownCount`, `totalCount`. Controles:
   - Búsqueda (`aria-label="Search Work Items"`, se aplica al escribir).
   - Status: All / Open / Closed.
   - Selección múltiple para Column, Priority, Severity, Area, Iteration y Tag. Cada una ofrece la opción `None` salvo Column, y todos los valores del catálogo aunque no se usen. Implementarlas como un popover con casillas y un botón con el nombre del filtro y el número de valores elegidos.
@@ -211,7 +211,7 @@ lectura.
   - Botón "Clear filters", visible con `hasActiveFilters(query)`.
 
   Cubre FR-007 y FR-008.
-- [ ] T019 [F9-US2] Completar `components/views/WorkItemsTable.tsx`:
+- [X] T019 [F9-US2] Completar `components/views/WorkItemsTable.tsx`:
   - Columnas en el orden de FR-005: ID, Title, Column, Status, Priority, Severity, Area, Iteration, Tags, Stakeholder, Start date, Target date, Created, Closed.
   - Encabezados ordenables (todos menos Tags) como `<button>` dentro de `<th scope="col" aria-sort=...>`. El primer clic ordena `asc` y el segundo `desc`; al cambiar de columna vuelve a `asc`.
   - Estado desde `useViewQuery("table", …)` y `useLocalToday()`.
@@ -227,7 +227,7 @@ lectura.
   - Con 0 resultados, un estado vacío "No Work Items match these filters." con "Clear filters".
   - Contenedor con scroll horizontal para pantallas angostas.
   - Sin ningún control de edición (FR-011).
-- [ ] T020 [F9-US2] Agregar a `tests/e2e/work-item-views.spec.ts` los escenarios de quickstart.md bloques 2 y 4:
+- [X] T020 [F9-US2] Agregar a `tests/e2e/work-item-views.spec.ts` los escenarios de quickstart.md bloques 2 y 4:
   1. Sembrar por UI un proyecto con prioridades, iteración "Sprint 12", un vencido y uno cerrado (con los helpers de 008: `selectOption` en Priority, Target date, columna de cierre).
   2. Orden por Priority `asc`/`desc` con los vacíos al final.
   3. Orden por Column según el orden del tablero.
@@ -251,7 +251,7 @@ filtros y los ancestros de lo que coincide como contexto.
 
 **Independent Test**: quickstart.md bloque 3.
 
-- [ ] T021 [F9-US3] Completar `components/views/WorkItemsList.tsx`:
+- [X] T021 [F9-US3] Completar `components/views/WorkItemsList.tsx`:
   - Estado desde `useViewQuery("list", …)` y `useLocalToday()`.
   - `<ViewFilters>`, el mismo de US2.
   - Con `hasActiveFilters`: `buildWorkItemTree(rows, new Set(filterWorkItems(...).map(r => r.id)))`. Sin filtros: `buildWorkItemTree(rows, null)`.
@@ -261,8 +261,8 @@ filtros y los ancestros de lo que coincide como contexto.
   - Los nodos `isContext` atenuados (FR-015).
   - Plegado en `useState<Set<number>>` (todo desplegado al cargar) y botones "Expand all" / "Collapse all" (FR-014).
   - Estado vacío con "Clear filters" cuando nada coincide.
-  - Sin controles de edición (FR-016).
-- [ ] T022 [F9-US3] Agregar a `tests/e2e/work-item-views.spec.ts` el escenario de quickstart.md bloque 3. Sembrar Epic → Child A → Grandchild, Epic → Child B y Loose, con las relaciones del detalle ("Convert into a child of…", `selectRelationOption` de los helpers). Comprobar:
+  - Sin controles de edición (FR-016). — *Nota de implementación*: cada `treeitem` lleva `aria-label="<ID> <título>"`; sin eso su nombre accesible se calculaba con todos los hijos anidados, algo que el e2e dejó en evidencia.
+- [X] T022 [F9-US3] Agregar a `tests/e2e/work-item-views.spec.ts` el escenario de quickstart.md bloque 3. Sembrar Epic → Child A → Grandchild, Epic → Child B y Loose, con las relaciones del detalle ("Convert into a child of…", `selectRelationOption` de los helpers). Comprobar:
   1. Anidación y orden.
   2. Plegar Epic oculta a sus descendientes y muestra "2".
   3. Expand/Collapse all.
@@ -275,22 +275,22 @@ filtros y los ancestros de lo que coincide como contexto.
 
 ## Final Phase: Polish & Cross-Cutting Concerns
 
-- [ ] T023 [P] Pasada de accesibilidad y de pantalla angosta de `components/views/*`:
+- [X] T023 [P] Pasada de accesibilidad y de pantalla angosta de `components/views/*`:
   - Navegación completa por teclado del selector, los filtros (popovers con Escape y foco de vuelta al botón), los encabezados ordenables y el árbol.
   - `aria-sort` correcto.
   - Etiquetas en todos los controles.
-  - La Tabla con scroll horizontal y el selector visibles a 375 px de ancho.
-- [ ] T024 [P] Actualizar `README.md`:
+  - La Tabla con scroll horizontal y el selector visibles a 375 px de ancho. — *Nota de implementación*: a 375 px la barra lateral de proyectos del layout general (`app/(workspace)/layout.tsx`) ocupa unos 255 px en todas las páginas, tablero incluido. Es preexistente y está fuera de alcance de 009, y quedó propuesta como tarea aparte. Las vistas en sí hacen scroll horizontal en su contenedor. El chip de fecha objetivo pasó a `whitespace-nowrap` para no partirse en dos líneas en la Lista.
+- [X] T024 [P] Actualizar `README.md`:
   - § Project status: Fase 3 completa, con [`specs/009-work-item-views`](specs/009-work-item-views/) enlazado.
   - § Roadmap: punto 8 marcado como hecho (lista y tabla; calendario diferido).
   - § Core concepts: mencionar las vistas Board / List / Table.
   - Badge de estado "phase 3 complete".
-- [ ] T025 [P] Actualizar `AGENTS.md`:
+- [X] T025 [P] Actualizar `AGENTS.md`:
   - Agregar `009-work-item-views` a la lista de specs (§ Start here).
   - En § Current state, indicar que la Fase 3 está implementada.
   - Mencionar `lib/work-item-view.ts` entre los módulos puros compartidos con el cliente.
-- [ ] T026 Desde la raíz del repositorio, correr `npm run lint`, `npm run test` y `npx tsc --noEmit`, y corregir cualquier fallo.
-- [ ] T027 Correr `npm run test:e2e` (base de pruebas confirmada por el product owner): las suites de Fases 1 y 2, la de 008 y `tests/e2e/work-item-views.spec.ts` deben quedar en verde. Registrar el resultado en esta tarea.
+- [X] T026 Desde la raíz del repositorio, correr `npm run lint`, `npm run test` y `npx tsc --noEmit`, y corregir cualquier fallo.
+- [X] T027 Correr `npm run test:e2e` (base de pruebas confirmada por el product owner): las suites de Fases 1 y 2, la de 008 y `tests/e2e/work-item-views.spec.ts` deben quedar en verde. Registrar el resultado en esta tarea. — *Hecho 2026-09-22*: **51/51 en verde** (15.3 min). En la primera corrida falló 1 test de 005 ("each navigable") de forma intermitente. La causa era una regresión de rendimiento de 008: `getWorkItemDetailData` hacía sus consultas nuevas en serie, después del resto, y la página de detalle tardaba más de 2 s en mostrar un enlace de relación. Se reprodujo en `main` (3 de 5 fallos) y no antes de 008 (5 de 5 sin fallos). Se corrigió corriendo esas consultas en paralelo: con eso solo, 6/6, y cada corrida del test bajó de unos 88 s a unos 34 s. Además el test usa un helper nuevo, `clickLinkUntilUrl`, que no vuelve a hacer clic si la navegación ya ocurrió.
 - [ ] T028 Correr manualmente `quickstart.md` de punta a punta (bloques 0 a 6), incluida la escala con ≥500 Work Items (SC-002), y registrar los resultados.
 
 ---
