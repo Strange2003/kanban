@@ -3,11 +3,11 @@ import { createResourceServerChallenge } from "@better-auth/oauth-provider";
 import { APIError } from "better-auth/api";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { agentLastUsed } from "@/db/schema";
 import { oauthClient, oauthConsent, user } from "@/db/auth-schema";
 import { runAsAgent } from "@/lib/actor";
 import { auth } from "@/lib/auth";
 import { MCP_RESOURCE } from "@/lib/mcp/config";
+import { touchAgentLastUsed } from "@/lib/mcp/last-used";
 import { createKanbanMcpHandler } from "@/lib/mcp/server";
 
 /**
@@ -43,27 +43,6 @@ function unauthorized(message: string): Response {
     status: 401,
     headers,
   });
-}
-
-// FR-035: "Last used" for the Connected agents page, written at most once a
-// minute per agent connection instead of on every call.
-const LAST_USED_WRITE_INTERVAL_MS = 60_000;
-const lastUsedWrites = new Map<string, number>();
-
-async function touchAgentLastUsed(userId: string, clientId: string) {
-  const key = `${userId}:${clientId}`;
-  const now = Date.now();
-  if (now - (lastUsedWrites.get(key) ?? 0) < LAST_USED_WRITE_INTERVAL_MS) return;
-  lastUsedWrites.set(key, now);
-  await db
-    .insert(agentLastUsed)
-    .values({ userId, clientId, lastUsedAt: new Date(now) })
-    .onConflictDoUpdate({ target: [agentLastUsed.userId, agentLastUsed.clientId], set: { lastUsedAt: new Date(now) } });
-}
-
-/** Forget the throttle for a revoked agent, so a re-authorized one shows up right away. */
-export function forgetAgentLastUsed(userId: string, clientId: string) {
-  lastUsedWrites.delete(`${userId}:${clientId}`);
 }
 
 export function createMcpRoute({ verify = defaultVerify }: { verify?: Verify } = {}) {

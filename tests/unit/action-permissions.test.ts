@@ -223,6 +223,7 @@ describe("mutating Server Actions reject callers whose role lacks the permission
 // membership alone, or an explicitly named exception. Exports of a "use server"
 // module are potentially callable from a client, which is why this covers them all.
 import * as accountsInvitationsModule from "@/lib/actions/accounts-invitations";
+import * as agentsModule from "@/lib/actions/agents";
 import * as boardModule from "@/lib/actions/board";
 import * as projectsModule from "@/lib/actions/projects";
 import * as workItemsModule from "@/lib/actions/work-items";
@@ -245,6 +246,8 @@ const MEMBERSHIP_ONLY_READS = [
   "listMyProjects", // only the caller's own projects
   "listMyNotifications", // only the caller's own notifications
   "markNotificationRead", // 011: only the caller's own notification (checked in the query)
+  "listConnectedAgents", // 011: only the caller's own agent authorizations
+  "revokeAgent", // 011: only the caller's own authorization (filtered by user id)
   "createProject", // any signed-in user may create a project
   "respondToInvitation", // only the invited email may answer it (checked in the action)
 ];
@@ -252,6 +255,7 @@ const MEMBERSHIP_ONLY_READS = [
 describe("every exported Server Action is classified", () => {
   const exported = [
     accountsInvitationsModule,
+    agentsModule,
     boardModule,
     projectsModule,
     workItemsModule,
