@@ -6,6 +6,7 @@ import {
   openCard,
   backToBoard,
   clickUntilVisible,
+  clickLinkUntilUrl,
   addColumn,
   addWorkItem,
 } from "./helpers";
@@ -119,11 +120,8 @@ test.describe("Work Item Relationships", () => {
 
     // Navigate from the parent's page straight to its child — a real URL
     // change, not a content swap (006-work-item-detail-view).
-    await clickUntilVisible(
-      page.getByRole("link", { name: /Implement form/ }),
-      page.getByRole("link", { name: /Design login/ }),
-    );
-    await expect(page).toHaveURL(/\/work-items\/2$/);
+    await clickLinkUntilUrl(page.getByRole("link", { name: /Implement form/ }), /\/work-items\/2$/);
+    await expect(page.getByRole("link", { name: /Design login/ })).toBeVisible({ timeout: LONG_TIMEOUT });
 
     // The browser back button returns to "Design login" (FR-006 of 006).
     await page.goBack();

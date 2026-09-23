@@ -375,26 +375,27 @@ export type WorkItemDetailData = {
 // server" file); only called after getWorkItemDetailData's membership check,
 // and every lookup is scoped to that project.
 async function getFieldsDetail(projectId: number, workItemId: number) {
-  const [row] = await db
-    .select({ stageName: stages.name, isClosing: stages.isClosing, areaName: areas.name, iterationName: iterations.name })
-    .from(workItems)
-    .innerJoin(stages, eq(stages.id, workItems.stageId))
-    .leftJoin(areas, eq(areas.id, workItems.areaId))
-    .leftJoin(iterations, eq(iterations.id, workItems.iterationId))
-    .where(and(eq(workItems.id, workItemId), eq(workItems.projectId, projectId)))
-    .limit(1);
-  if (!row) throw new AppError("NOT_FOUND", "Work item not found.");
-
-  const [closing] = await db
-    .select({ id: stages.id })
-    .from(stages)
-    .where(and(eq(stages.projectId, projectId), eq(stages.isClosing, true)))
-    .limit(1);
-
-  const [catalogAreas, catalogIterations] = await Promise.all([
+  // All four lookups at once: run one after another they added sequential
+  // round trips to every detail page open (008 SC-007; found through a flaky
+  // 005 e2e whose page took >2s to show a relation link).
+  const [[row], [closing], catalogAreas, catalogIterations] = await Promise.all([
+    db
+      .select({ stageName: stages.name, isClosing: stages.isClosing, areaName: areas.name, iterationName: iterations.name })
+      .from(workItems)
+      .innerJoin(stages, eq(stages.id, workItems.stageId))
+      .leftJoin(areas, eq(areas.id, workItems.areaId))
+      .leftJoin(iterations, eq(iterations.id, workItems.iterationId))
+      .where(and(eq(workItems.id, workItemId), eq(workItems.projectId, projectId)))
+      .limit(1),
+    db
+      .select({ id: stages.id })
+      .from(stages)
+      .where(and(eq(stages.projectId, projectId), eq(stages.isClosing, true)))
+      .limit(1),
     listCatalog("area", projectId),
     listCatalog("iteration", projectId),
   ]);
+  if (!row) throw new AppError("NOT_FOUND", "Work item not found.");
 
   return {
     catalogAreas,
@@ -421,20 +422,26 @@ export async function getWorkItemDetailData(
   projectPublicId: string,
 ): Promise<Result<WorkItemDetailData>> {
   return runAction(async () => {
+    // The 008 fields lookup only needs the project id, so it starts as soon as
+    // membership is confirmed and overlaps with the other reads.
+    const member = requireProjectMember(projectPublicId);
+    const fields = member.then(({ project }) => getFieldsDetail(project.id, workItemId));
     const [
-      { membership, project },
+      { membership },
       catalogResult,
       itemTagsResult,
       activityResult,
       relationsResult,
       pickableResult,
+      fieldsDetail,
     ] = await Promise.all([
-      requireProjectMember(projectPublicId),
+      member,
       listProjectTags(projectPublicId),
       getWorkItemTags(workItemId),
       listWorkItemActivity(workItemId),
       getWorkItemRelations(workItemId),
       listProjectWorkItems(projectPublicId, workItemId),
+      fields,
     ]);
 
     if (!catalogResult.ok)
@@ -455,7 +462,7 @@ export async function getWorkItemDetailData(
       relations: relationsResult.data,
       pickableWorkItems: pickableResult.data,
       role: membership.role,
-      ...(await getFieldsDetail(project.id, workItemId)),
+      ...fieldsDetail,
     };
   });
 }

@@ -68,6 +68,27 @@ export async function clickUntilVisible(trigger: Locator, target: Locator, attem
 }
 
 /**
+ * Clicks a navigation link and retries only while the URL hasn't changed —
+ * the same hydration-timing retry as `openCard`. Unlike `clickUntilVisible`
+ * (meant for idempotent toggles), it never clicks again once the navigation
+ * happened, so a slow destination page can't make it re-click a link that no
+ * longer exists (which hung the 005 "each navigable" test).
+ */
+export async function clickLinkUntilUrl(link: Locator, url: RegExp, attempts = 3) {
+  const page = link.page();
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    if (url.test(page.url())) return;
+    await link.click();
+    try {
+      await page.waitForURL(url, { timeout: 5000 });
+      return;
+    } catch {
+      if (attempt === attempts) throw new Error(`Clicking "${link}" never navigated to ${url}.`);
+    }
+  }
+}
+
+/**
  * Adds a board column. Opening the form goes through `clickUntilVisible` (the
  * "+ Add column" button is often clicked right after a client-side navigation,
  * before hydration), and the submit button is matched exactly — a loose
