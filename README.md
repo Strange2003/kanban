@@ -21,7 +21,8 @@ Existing self-hostable alternatives (Kan.bn, Kaneo, Vikunja, Planka, WeKan, Kanb
 - **Roles**: every member is an **Owner** (exactly one per project — manages the project and its members, and can transfer ownership), a **Member** (edits everything and can invite) or a **Viewer** (read-only). Whoever invites picks the role; the owner can change it later.
 - **Views**: every project can be seen as a **Board** (the Kanban, the main view), a **List** (a collapsible parent/child backlog) or a **Table** (every field, sortable and filterable — filters live in the URL, so a filtered view can be shared). List and Table are read-only; editing happens on the board and in a Work Item's detail view.
 - **Board**: each project has one Kanban board. Columns and "stages" are the same thing — create/rename/delete/reorder columns freely, all via drag-and-drop. Any column can be marked as a **closing column** (e.g. "Done"): Work Items in it are closed.
-- **Work Items**: the cards on the board. Each gets a short, human-readable ID (e.g. `KAN-42`), a title, description, stakeholder, and tags from a per-project catalog; plus priority and severity (Critical / High / Medium / Low), an area and an iteration from per-project catalogs, and optional start and target dates. A Work Item records when it was created, last modified and closed — it closes when it enters a closing column (by dragging, or with its "Close" button) and reopens when it leaves; a past target date on an open Work Item shows as overdue.
+- **Work Items**: the cards on the board. Each gets a short, human-readable ID (e.g. `KAN-42`), a title, description, an **assignee** (one of the project's members, who gets an in-app notification) and tags from a per-project catalog; plus priority and severity (Critical / High / Medium / Low), an area and an iteration from per-project catalogs, and optional start and target dates. A Work Item records when it was created, last modified and closed — it closes when it enters a closing column (by dragging, or with its "Close" button) and reopens when it leaves; a past target date on an open Work Item shows as overdue. Its history records who made each change.
+- **AI agents**: connect an AI assistant (Claude Code, Claude Desktop, claude.ai or any other [MCP](https://modelcontextprotocol.io) client) and ask it to read your projects, create and assign Work Items, move them between columns or reorganize the board — personal and shared projects alike. It signs in as you through a consent screen (no keys to copy), acts with exactly your role in each project, can't manage members or projects, its changes are marked "via <agent>" in the history, and you can revoke it at any time. See [Connecting an AI agent](#connecting-an-ai-agent-mcp).
 
 ## Tech stack
 
@@ -34,6 +35,7 @@ Existing self-hostable alternatives (Kan.bn, Kaneo, Vikunja, Planka, WeKan, Kanb
 | Transactional email | [Resend](https://resend.com) | Email verification + password reset links |
 | Drag & drop | [dnd-kit](https://dndkit.com) | Columns and Work Item reordering |
 | UI | Tailwind CSS + [shadcn/ui](https://ui.shadcn.com) | — |
+| AI agent access | [MCP](https://modelcontextprotocol.io) server (`@modelcontextprotocol/server`) + OAuth 2.1 from Better Auth's `mcp()` plugin | An open standard any assistant can use; authorization stays inside this app and its database |
 | Testing | Vitest (unit) + Playwright (end-to-end) | — |
 | Suggested hosting | [Render](https://render.com) (Web Service) | One place for the app; the database stays on Neon regardless of where the app runs |
 
@@ -107,7 +109,20 @@ Any host that runs a persistent Node.js process works — the app is a standard 
 1. Create a Web Service, connect this repository.
 2. Set the same environment variables as above in Render's dashboard.
 3. Set the build command to `npm run build` and the start command to `npm start`.
-4. Before each deploy that ships new files under `db/migrations/`, run `npm run db:migrate` with `DATABASE_URL` pointing at that instance's database — migrate first, then ship the code that depends on it.
+4. Before each deploy that ships new files under `db/migrations/`, run `npm run db:migrate` with `DATABASE_URL` pointing at that instance's database — migrate first, then ship the code that depends on it. Migrations `0005`-`0006` need **Postgres 15 or later** (Neon's default is newer) and drop the old `stakeholder` column, so deploy the code right after applying them.
+5. Make sure `BETTER_AUTH_URL` is the instance's public `https://` address: the AI-agent connection address and its OAuth metadata are derived from it.
+
+To delete an account by hand (e.g. a user asks you to), delete its rows in `project_members` **before** the `user` row: that unassigns its Work Items (the database does it) — the OAuth authorizations of its AI agents go away with the `user` row.
+
+### Connecting an AI agent (MCP)
+
+Every instance serves an MCP server at `<your-domain>/api/mcp` — nothing to configure. A user adds that address to their assistant as a remote MCP server; with Claude Code:
+
+```bash
+claude mcp add --transport http kanban https://<your-domain>/api/mcp
+```
+
+On first use the assistant opens the browser: the user signs in (Google or email) and sees a consent screen saying what the agent will and won't be able to do. After **Allow**, the assistant can list the user's projects, read boards, search Work Items, create them (up to 50 at once), edit, assign, move, relate and delete them, and create/rename/reorder/delete columns — always with the user's own role in each project (a Viewer's agent can only read). It can't invite or remove people, change roles, or rename/delete/leave projects. Every change it makes shows in the Work Item's history as "by <user> via <agent>". **Settings → Connected agents** (the robot icon in the header) lists every authorized agent and revokes one immediately. Design: [`specs/011-agent-access-mcp`](specs/011-agent-access-mcp/).
 
 See [`specs/001-accounts-invitations/plan.md`](specs/001-accounts-invitations/plan.md#acciones-manuales-requeridas) for the full list of one-time manual setup steps and why each platform was chosen over alternatives (Vercel, Railway).
 
@@ -121,7 +136,7 @@ This project follows **Spec-Driven Development**: every feature is specified, cl
 - ✅ **Phase 3 (planning & views)** — extended Work Item fields and closing columns ([`specs/008-work-item-fields`](specs/008-work-item-fields/)) and the List and Table views ([`specs/009-work-item-views`](specs/009-work-item-views/)) **implemented**, with the unit and end-to-end suites green (a calendar view is deferred); the manual quickstart passes of 008 (T052) and 009 (T028) are still open
 - ✅ **Deployment** — the first instance runs on Render against its own production Neon branch (all migrations `0000`-`0004` applied); development and the e2e suite use a separate `dev` branch
 - ✅ **Public legal pages** ([`specs/010-legal-pages`](specs/010-legal-pages/)) — `/privacy` and `/terms`, required by Google to publish "Sign in with Google" beyond test users
-- ⬜ **Phase 4** — not specified yet, and its scope isn't confirmed (see the candidates in [Roadmap](#roadmap))
+- 🟡 **Phase 4** — [`specs/011-agent-access-mcp`](specs/011-agent-access-mcp/): AI agent access over MCP (OAuth consent, the user's own role, connected-agents page) and the **Assignee** field that replaces the free-text stakeholder, with assignment notifications — **implemented on its branch** with the unit and end-to-end suites green; pending merge, migrations `0005`-`0006` on production, deploy, and the manual check with a real assistant (T057). The rest of Phase 4 isn't confirmed yet (see [Roadmap](#roadmap))
 
 ## Roadmap
 
@@ -140,11 +155,13 @@ This project follows **Spec-Driven Development**: every feature is specified, cl
 8. Additional views: list and table ✅ *done* *(a calendar view is deferred)*
 9. Extended fields (priority, severity, area, iteration, dates, closing columns) ✅ *done*
 
-**Phase 4 — Candidates** *(not yet confirmed in scope)*
+**Phase 4**
+11. AI agent access (MCP) + Work Item assignee 🟡 *implemented, pending merge*
+
+Candidates *(not yet confirmed in scope)*:
 - Discussion / comments on Work Items (listed in the original vision's data hierarchy and Work Item reference)
 - Calendar view (deferred from Phase 3; Work Items already store start, target and closing dates for it)
 - Managing catalogs: rename/delete tags, areas and iterations (every catalog only grows today)
-- Deployment: a first public Render instance
 
 ## Contributing
 

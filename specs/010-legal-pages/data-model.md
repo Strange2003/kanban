@@ -18,7 +18,8 @@ revisar SC-005:
 | Tokens de verificación y recuperación | `verification` (temporales, con vencimiento) |
 | Proyectos y su contenido | `projects`, `stages`, `work_items`, `tags`, `work_item_tags`, `areas`, `iterations`, `work_item_related_links` |
 | Membresías, invitaciones, notificaciones | `project_members`, `invitations`, `notifications` |
-| Registro de actividad | `work_item_activity` |
+| Registro de actividad (con autor y agente, desde 011) | `work_item_activity` (`actor_user_id`, `agent_client_id`, `agent_name`) |
+| Agentes de IA conectados (011-agent-access-mcp) | `oauth_client`, `oauth_consent`, `oauth_access_token`, `oauth_refresh_token`, `agent_last_used`, `jwks` (clave de firma de la instancia, no dato personal) |
 | Cookies | solo la cookie de sesión de Better Auth |
 
 Si una feature futura agrega datos personales nuevos, hay que actualizar la

@@ -51,7 +51,13 @@ export default async function PrivacyPage() {
           send or receive, and your in-app notifications.
         </li>
         <li>
-          <strong>Activity history:</strong> a log of changes made to each Work Item and who made them.
+          <strong>Activity history:</strong> a log of changes made to each Work Item, who made them and, when
+          the change came through an AI agent, which agent.
+        </li>
+        <li>
+          <strong>Connected AI agents:</strong> if you allow an AI assistant to access your account, the agent&apos;s
+          name and address as it registered itself, when you allowed it, when it last used its access, and the
+          access tokens it was issued. Revoking an agent deletes its authorization and tokens.
         </li>
       </ul>
 
@@ -74,6 +80,11 @@ export default async function PrivacyPage() {
         <li>A database provider, which stores all the data listed above.</li>
         <li>An email delivery provider, which sends verification and password reset emails to your address.</li>
         <li>A hosting provider, which runs the application and receives your requests.</li>
+        <li>
+          Any AI assistant you choose to connect. It receives the data it reads on your behalf — the same data your
+          role lets you see in the projects you belong to — and is then governed by that assistant&apos;s own terms
+          and privacy policy. Nothing is sent to an assistant you haven&apos;t allowed.
+        </li>
         <li>
           Google, only if you choose to sign in with Google. We receive only your name, email address and profile
           picture, and use them only to identify you. We don&apos;t use Google data for any other purpose.
