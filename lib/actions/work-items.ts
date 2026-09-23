@@ -4,7 +4,17 @@ import { revalidatePath } from "next/cache";
 import { and, asc, desc, eq, gt, gte, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
-import { workItems, stages, projects, workItemActivity, tags, workItemTags, areas, iterations } from "@/db/schema";
+import {
+  workItems,
+  stages,
+  projects,
+  projectMembers,
+  workItemActivity,
+  tags,
+  workItemTags,
+  areas,
+  iterations,
+} from "@/db/schema";
 import { user } from "@/db/auth-schema";
 import { logActivity } from "@/lib/activity";
 import { requireProjectMember, requireProjectPermission } from "@/lib/permissions";
@@ -228,6 +238,24 @@ export async function createWorkItems(input: {
       }
       return parsed.data;
     });
+
+    // Report a non-member assignee by index too, before anything is written.
+    // (The composite FK still guards the race where someone leaves meanwhile.)
+    const assigneeIds = [...new Set(parsedItems.flatMap((item) => (item.assigneeUserId ? [item.assigneeUserId] : [])))];
+    if (assigneeIds.length > 0) {
+      const members = await db
+        .select({ userId: projectMembers.userId })
+        .from(projectMembers)
+        .where(and(eq(projectMembers.projectId, project.id), inArray(projectMembers.userId, assigneeIds)));
+      const memberIds = new Set(members.map((m) => m.userId));
+      const index = parsedItems.findIndex((item) => item.assigneeUserId && !memberIds.has(item.assigneeUserId));
+      if (index !== -1) {
+        throw new AppError(
+          "BATCH_ITEM_INVALID",
+          `Item at index ${index} ("${parsedItems[index]!.title}"): the assignee isn't a member of this project.`,
+        );
+      }
+    }
 
     const actor = await getActor();
     let created: WorkItemRow[];

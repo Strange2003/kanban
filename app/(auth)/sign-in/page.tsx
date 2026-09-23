@@ -33,7 +33,7 @@ export default function SignInPage() {
     }
 
     setSubmitting(true);
-    const { error: signInError } = await authClient.signIn.email({
+    const { data, error: signInError } = await authClient.signIn.email({
       email: parsed.data.email,
       password: parsed.data.password,
     });
@@ -44,6 +44,10 @@ export default function SignInPage() {
       return;
     }
 
+    // Signing in to authorize an AI agent (011-agent-access-mcp): Better Auth
+    // answers with the next step (the consent screen) and navigates there
+    // itself — don't send the user home on top of it.
+    if ((data as { redirect?: boolean; url?: string } | null)?.redirect) return;
     router.push("/");
   }
 

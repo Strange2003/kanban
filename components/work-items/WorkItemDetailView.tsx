@@ -24,74 +24,11 @@ import { AssigneePicker } from "@/components/work-items/AssigneePicker";
 import { LocalDate } from "@/components/ui/local-date";
 import { formatCalendarDate, useLocalToday } from "@/lib/dates";
 import { LEVEL_LABELS, WORK_ITEM_LEVELS, isOverdue, type WorkItemLevel } from "@/lib/work-item-fields";
+import { describeWorkItemActivity, type WorkItemActivityEntryView } from "@/lib/work-item-activity";
 
-type ActivityEntry = {
-  id: number;
-  type: string;
-  payload: unknown;
-  createdAt: Date;
-  // 011-agent-access-mcp FR-034: who made the change, and through which AI agent.
-  actorName: string | null;
-  agentName: string | null;
-};
+type ActivityEntry = WorkItemActivityEntryView;
 
-type PersonRef = { userId: string; name: string } | null;
-
-// 008-work-item-fields (FR-020): these fields are shown with their previous
-// and new value; the older ones keep the "Edited …" summary.
-const FIELD_LABELS: Record<string, string> = {
-  priority: "Priority",
-  severity: "Severity",
-  area: "Area",
-  iteration: "Iteration",
-  startDate: "Start date",
-  targetDate: "Target date",
-};
-
-function formatFieldValue(field: string, value: unknown): string {
-  if (value === null || value === undefined || value === "") return "None";
-  if (field === "priority" || field === "severity") return LEVEL_LABELS[value as WorkItemLevel] ?? String(value);
-  if (field === "startDate" || field === "targetDate") return formatCalendarDate(String(value));
-  return String(value);
-}
-
-function describeActivity(entry: ActivityEntry): string {
-  if (entry.type === "stage_changed") return "Moved to a different column";
-  if (entry.type === "fields_edited") {
-    const payload = entry.payload as { fields?: Record<string, { from: unknown; to: unknown }> };
-    const fields = payload.fields ?? {};
-    const legacy = Object.keys(fields).filter((f) => !(f in FIELD_LABELS));
-    const parts = [
-      ...(legacy.length > 0 ? [`Edited ${legacy.join(", ")}`] : []),
-      ...Object.entries(fields)
-        .filter(([f]) => f in FIELD_LABELS)
-        .map(([f, c]) => `${FIELD_LABELS[f]}: ${formatFieldValue(f, c.from)} → ${formatFieldValue(f, c.to)}`),
-    ];
-    return parts.length > 0 ? parts.join("; ") : "Edited";
-  }
-  if (entry.type === "closed") {
-    const { stageName, via } = entry.payload as { stageName: string; via: string };
-    if (via === "stage_marked") return `Closed: column ${stageName} marked as closing`;
-    if (via === "created") return `Closed (created in ${stageName})`;
-    return `Closed (moved to ${stageName})`;
-  }
-  if (entry.type === "reopened") {
-    const { stageName, via } = entry.payload as { stageName: string; via: string };
-    if (via === "stage_unmarked") return `Reopened: column ${stageName} unmarked as closing`;
-    return `Reopened (moved to ${stageName})`;
-  }
-  if (entry.type === "assignee_changed") {
-    const { from, to, reason } = entry.payload as { from: PersonRef; to: PersonRef; reason?: string };
-    if (reason === "member_left") return `Unassigned (${from?.name ?? "the assignee"} left the project)`;
-    return to ? `Assigned to ${to.name}` : "Unassigned";
-  }
-  if (entry.type === "created") return "Created";
-  if (entry.type === "parent_linked") return "Linked to a parent Work Item";
-  if (entry.type === "parent_unlinked") return "Unlinked from its parent Work Item";
-  if (entry.type === "related_linked") return "Linked to a related Work Item";
-  if (entry.type === "related_unlinked") return "Unlinked from a related Work Item";
-  return entry.type;
-}
+const describeActivity = (entry: ActivityEntry) => describeWorkItemActivity(entry, formatCalendarDate);
 
 const selectClassName =
   "flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";

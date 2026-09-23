@@ -476,6 +476,19 @@ describe("createWorkItems", () => {
     expect(fake.writes).toEqual([]);
   });
 
+  it("reports an assignee who isn't a member by the item's index and creates nothing", async () => {
+    fake.queue.project_members = [[MEMBER], []];
+
+    const result = await createWorkItems({
+      stagePublicId: "stage-1",
+      items: [{ title: "A" }, { title: "B", assigneeUserId: "stranger" }],
+    });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "BATCH_ITEM_INVALID" } });
+    expect(!result.ok && result.error.message).toContain("index 1");
+    expect(fake.writes).toEqual([]);
+  });
+
   it("rejects an item whose target date is before its start date, by index", async () => {
     const result = await createWorkItems({
       stagePublicId: "stage-1",
