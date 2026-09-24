@@ -157,7 +157,7 @@ export function StageColumn({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
-        "flex w-72 shrink-0 snap-start flex-col rounded-lg border border-border bg-card transition-colors",
+        "flex max-h-full min-h-0 w-72 shrink-0 snap-start flex-col rounded-lg border border-border bg-card transition-colors",
         isOver && "border-primary/50 bg-accent/40",
         isDragging && "opacity-50",
       )}
@@ -213,7 +213,10 @@ export function StageColumn({
           )}
         </div>
       </div>
-      <div className="flex flex-1 flex-col gap-2 px-2 pb-2">
+      {/* The card list scrolls inside the column so a long column never spills
+          past its container; the add button follows the last card, and stays
+          pinned under the list once it overflows. */}
+      <div className="flex min-h-0 flex-initial flex-col gap-2 overflow-y-auto px-2 pb-2">
         <SortableContext
           items={workItems.map((wi) => `work-item:${wi.id}`)}
           strategy={verticalListSortingStrategy}
@@ -232,8 +235,12 @@ export function StageColumn({
             />
           ))}
         </SortableContext>
-        {canEdit && <AddWorkItemButton stagePublicId={stage.publicId} />}
       </div>
+      {canEdit && (
+        <div className="flex shrink-0 flex-col px-2 pb-2">
+          <AddWorkItemButton stagePublicId={stage.publicId} />
+        </div>
+      )}
     </div>
   );
 }

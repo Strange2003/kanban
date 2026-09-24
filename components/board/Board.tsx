@@ -4,11 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
+  DragOverlay,
   KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -20,6 +22,7 @@ import { reorderStages, setStageClosing, type StageWithCount } from "@/lib/actio
 import { moveWorkItem, reorderWorkItemsInStage } from "@/lib/actions/work-items";
 import type { BoardWorkItem } from "@/lib/actions/board";
 import { StageColumn } from "@/components/board/StageColumn";
+import { WorkItemCardPreview } from "@/components/board/WorkItemCard";
 import { isRolePermissionError } from "@/lib/errors";
 import { can, type ProjectRole } from "@/lib/roles";
 import { AddStageButton } from "@/components/board/AddStageButton";
@@ -44,6 +47,10 @@ export function Board({
   const canEdit = can(role, "board:edit");
   const [stagesState, setStagesState] = useState(initialStages);
   const [workItemsState, setWorkItemsState] = useState(initialWorkItems);
+  // The Work Item being dragged, rendered in a DragOverlay: each column's card
+  // list scrolls on its own, so the card itself would be clipped the moment it
+  // left its column.
+  const [draggedWorkItemId, setDraggedWorkItemId] = useState<number | null>(null);
 
   // `initialStages`/`initialWorkItems` are fresh arrays every time the server
   // component re-renders (e.g. router.refresh() after creating a column or
@@ -205,7 +212,13 @@ export function Board({
     if (target) void handleWorkItemReorder(workItemId, target.id, stageId);
   }
 
+  function handleDragStart(event: DragStartEvent) {
+    const workItemId = event.active.data.current?.workItemId as number | undefined;
+    setDraggedWorkItemId(workItemId ?? null);
+  }
+
   function handleDragEnd(event: DragEndEvent) {
+    setDraggedWorkItemId(null);
     const { active, over } = event;
     if (!over || !canEdit) return;
 
@@ -250,15 +263,26 @@ export function Board({
     );
   }
 
+  const draggedWorkItem =
+    draggedWorkItemId === null
+      ? undefined
+      : workItemsState.find((wi) => wi.id === draggedWorkItemId);
+
   return (
-    <DndContext id="board-dnd" sensors={sensors} onDragEnd={handleDragEnd}>
+    <DndContext
+      id="board-dnd"
+      sensors={sensors}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragCancel={() => setDraggedWorkItemId(null)}
+    >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {stagesState.length > 1 && (
           <p className="px-4 pt-2 text-xs text-muted-foreground md:hidden">
             Swipe sideways to see all {stagesState.length} columns.
           </p>
         )}
-        <div className="flex min-h-0 min-w-0 flex-1 snap-x snap-mandatory scroll-px-4 gap-4 overflow-auto p-4 md:snap-none">
+        <div className="flex min-h-0 min-w-0 flex-1 snap-x snap-mandatory scroll-px-4 gap-4 overflow-x-auto overflow-y-hidden p-4 md:snap-none">
           <SortableContext
             items={stagesState.map((s) => `stage:${s.id}`)}
             strategy={horizontalListSortingStrategy}
@@ -284,6 +308,10 @@ export function Board({
           {canEdit && <AddStageButton projectPublicId={projectPublicId} />}
         </div>
       </div>
+      {/* Empty while a column is dragged, so columns keep moving in place. */}
+      <DragOverlay>
+        {draggedWorkItem && <WorkItemCardPreview workItem={draggedWorkItem} />}
+      </DragOverlay>
     </DndContext>
   );
 }

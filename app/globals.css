@@ -78,3 +78,36 @@ body {
   background: var(--background);
   color: var(--foreground);
 }
+
+/* Scrollbars that match the theme instead of the OS default: thin, rounded,
+   transparent track. Chrome/Firefox read the standard properties; Safari only
+   the ::-webkit-scrollbar ones. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--muted-foreground) 35%, transparent) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 9999px;
+  background-clip: padding-box;
+  background-color: color-mix(in oklch, var(--muted-foreground) 35%, transparent);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in oklch, var(--muted-foreground) 60%, transparent);
+}
+
+::-webkit-resizer {
+  background: transparent;
+}

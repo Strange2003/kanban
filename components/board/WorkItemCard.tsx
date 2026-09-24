@@ -204,3 +204,30 @@ export function WorkItemCard({
     </div>
   );
 }
+
+// What follows the pointer while a card is dragged (the DragOverlay in
+// Board.tsx) — a static copy, since the real card stays in its column.
+export function WorkItemCardPreview({ workItem }: { workItem: BoardWorkItem }) {
+  return (
+    <div className="cursor-grabbing rounded-md border border-border bg-background p-2 text-sm shadow-lg ring-1 ring-primary/20">
+      <span className="text-muted-foreground text-xs">{workItem.displayId}</span>
+      <p className="font-medium">{workItem.title}</p>
+      {(workItem.priority || workItem.targetDate || workItem.assignee) && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          {workItem.priority && <PriorityBadge level={workItem.priority} />}
+          {workItem.targetDate && (
+            <TargetDateChip targetDate={workItem.targetDate} closedAt={workItem.closedAt} />
+          )}
+          {workItem.assignee && (
+            <Avatar
+              name={workItem.assignee.name}
+              image={workItem.assignee.image}
+              size="sm"
+              className="ml-auto"
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
