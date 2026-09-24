@@ -158,12 +158,12 @@ test.describe("Views — sortable, filterable table (US2)", () => {
     // Overdue only → just Delta, with the same overdue mark as the board.
     await page.getByRole("button", { name: "Clear filters" }).click();
     await expect(tableRows(page)).toHaveCount(5);
-    await page.getByLabel("Overdue only").check();
+    await page.getByRole("checkbox", { name: "Overdue only" }).check();
     await expect.poll(() => firstCells(page)).toEqual(["Delta"]);
     await expect(tableRows(page).first().getByTestId("target-date-chip")).toHaveAttribute("data-overdue", "true");
 
     // Search by display id, lower-case.
-    await page.getByLabel("Overdue only").uncheck();
+    await page.getByRole("checkbox", { name: "Overdue only" }).uncheck();
     const deltaId = (await tableRows(page).filter({ hasText: "Delta" }).locator("td").first().innerText()).trim();
     await page.getByLabel("Search Work Items").fill(deltaId.toLowerCase());
     await expect.poll(() => firstCells(page)).toEqual(["Delta"]);

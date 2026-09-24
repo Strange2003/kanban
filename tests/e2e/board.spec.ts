@@ -1,12 +1,12 @@
 import { test, expect } from "@playwright/test";
-import { signUpNewUser, createProjectViaUi, addColumn, addWorkItem, clickUntilVisible, pointerDrag } from "./helpers";
+import { signUpNewUser, createProjectViaUi, addColumn, addWorkItem, clickUntilVisible, pointerDrag, stageColumn } from "./helpers";
 
 // quickstart.md bloque 3.
 
 /** Same pointer-sequence approach as dragWorkItemToColumn in helpers.ts — dnd-kit ignores native HTML5 drag events. */
 async function dragColumn(page: import("@playwright/test").Page, columnName: string, targetColumnName: string) {
-  const source = page.locator('[data-testid="stage-column"]', { hasText: columnName });
-  const target = page.locator('[data-testid="stage-column"]', { hasText: targetColumnName });
+  const source = stageColumn(page, columnName);
+  const target = stageColumn(page, targetColumnName);
 
   const from = await source.boundingBox();
   const to = await target.boundingBox();
@@ -64,12 +64,12 @@ test.describe("Kanban board", () => {
     await page.getByRole("button", { name: "Add", exact: true }).click();
     await expect(page.getByText("Something to do")).toBeVisible();
 
-    const busyColumn = page.locator('[data-testid="stage-column"]', { hasText: "Busy column" });
+    const busyColumn = stageColumn(page, "Busy column");
     await busyColumn.getByRole("button", { name: "Delete column" }).click();
     await expect(page.getByText(/move or delete/i)).toBeVisible();
     await expect(page.getByRole("heading", { name: "Busy column", level: 3 })).toBeVisible();
 
-    const emptyColumn = page.locator('[data-testid="stage-column"]', { hasText: "Empty column" });
+    const emptyColumn = stageColumn(page, "Empty column");
     await emptyColumn.getByRole("button", { name: "Delete column" }).click();
     await expect(page.getByRole("heading", { name: "Empty column", level: 3 })).toBeHidden();
   });
@@ -106,14 +106,15 @@ test.describe("Kanban board", () => {
 
     const card = page.locator('[data-testid="work-item-card"]', { hasText: "Review the layout" });
     await card.getByRole("combobox", { name: /Move .* to column/ }).selectOption({ label: "Doing" });
-    await expect(page.locator('[data-testid="stage-column"]', { hasText: "Doing" }).getByTestId("work-item-card")).toContainText("Review the layout");
+    await expect(stageColumn(page, "Doing").getByTestId("work-item-card")).toContainText("Review the layout");
   });
 
   test("keeps the board usable with the mobile project drawer", async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
+    // Set up at desktop width — on a phone the sidebar (and its "New project") lives in the drawer.
     await signUpNewUser(page);
     await createProjectViaUi(page, "Mobile board");
     await addColumn(page, "To do");
+    await page.setViewportSize({ width: 390, height: 844 });
 
     await expect(page.getByRole("heading", { name: "Mobile board", level: 1 })).toBeVisible();
     await page.getByRole("button", { name: "Open projects" }).click();

@@ -17,11 +17,8 @@ import {
   sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
 import { reorderStages, setStageClosing, type StageWithCount } from "@/lib/actions/board";
-import {
-  moveWorkItem,
-  reorderWorkItemsInStage,
-  type WorkItemWithDisplayId,
-} from "@/lib/actions/work-items";
+import { moveWorkItem, reorderWorkItemsInStage } from "@/lib/actions/work-items";
+import type { BoardWorkItem } from "@/lib/actions/board";
 import { StageColumn } from "@/components/board/StageColumn";
 import { isRolePermissionError } from "@/lib/errors";
 import { can, type ProjectRole } from "@/lib/roles";
@@ -38,7 +35,7 @@ export function Board({
   projectPublicId: string;
   role: ProjectRole;
   initialStages: StageWithCount[];
-  initialWorkItems: WorkItemWithDisplayId[];
+  initialWorkItems: BoardWorkItem[];
 }) {
   const { toast } = useToast();
   const router = useRouter();

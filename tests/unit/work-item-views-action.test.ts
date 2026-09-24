@@ -73,7 +73,7 @@ beforeEach(() => {
           parentWorkItemId: null,
           priority: "high",
           severity: null,
-          stakeholder: null,
+          assigneeUserId: null,
           startDate: null,
           targetDate: "2026-10-01",
           createdAt: new Date("2026-09-01T00:00:00Z"),
@@ -129,13 +129,18 @@ describe("getWorkItemsView", () => {
       areaName: "Frontend",
       iterationName: null,
       tags: ["auth", "ux"],
+      assignee: null,
     });
     expect(result.data.options).toEqual({
       stages: [{ publicId: "stage-done", name: "Done", isClosing: true }],
       areas: ["Frontend"],
       iterations: [],
       tags: ["auth", "ux"],
+      // The fake answers every project_members read with the same rows.
+      members: fake.rows.project_members,
     });
+    // 011-agent-access-mcp FR-008: resolves the "Assigned to me" filter.
+    expect(result.data.currentUserId).toBe("u1");
     expect(fake.writes).toEqual([]);
   });
 });

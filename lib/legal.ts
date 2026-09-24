@@ -5,7 +5,7 @@ export type Operator = { name: string | null; contactEmail: string | null };
 
 // ISO date the legal text in app/(legal)/ last changed. Bump it with every
 // edit to /privacy or /terms — both pages show it as "Last updated".
-export const LEGAL_LAST_UPDATED = "2026-09-22";
+export const LEGAL_LAST_UPDATED = "2026-09-23";
 
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

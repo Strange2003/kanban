@@ -11,7 +11,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { renameStage, type StageWithCount } from "@/lib/actions/board";
-import type { WorkItemWithDisplayId } from "@/lib/actions/work-items";
+import type { BoardWorkItem } from "@/lib/actions/board";
 import { WorkItemCard } from "@/components/board/WorkItemCard";
 import { AddWorkItemButton } from "@/components/board/AddWorkItemButton";
 import { DeleteStageButton } from "@/components/board/DeleteStageButton";
@@ -126,7 +126,7 @@ export function StageColumn({
   canEdit: boolean;
   stage: StageWithCount;
   stages: { id: number; name: string }[];
-  workItems: WorkItemWithDisplayId[];
+  workItems: BoardWorkItem[];
   // 008-work-item-fields (FR-011): Board owns the optimistic update.
   onToggleClosing: (stage: StageWithCount) => void;
   onMoveWorkItem: (workItemId: number, stageId: number) => void;

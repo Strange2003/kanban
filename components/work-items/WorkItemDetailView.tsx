@@ -20,62 +20,16 @@ import { ReadOnlyNotice } from "@/components/ui/read-only-notice";
 import { isRolePermissionError } from "@/lib/errors";
 import { can } from "@/lib/roles";
 import { CatalogPicker } from "@/components/work-items/CatalogPicker";
+import { AssigneePicker } from "@/components/work-items/AssigneePicker";
 import { LocalDate } from "@/components/ui/local-date";
 import { useToast } from "@/components/ui/toast";
 import { formatCalendarDate, useLocalToday } from "@/lib/dates";
 import { LEVEL_LABELS, WORK_ITEM_LEVELS, isOverdue, type WorkItemLevel } from "@/lib/work-item-fields";
+import { describeWorkItemActivity, type WorkItemActivityEntryView } from "@/lib/work-item-activity";
 
-type ActivityEntry = { id: number; type: string; payload: unknown; createdAt: Date };
+type ActivityEntry = WorkItemActivityEntryView;
 
-// 008-work-item-fields (FR-020): these fields are shown with their previous
-// and new value; the older ones keep the "Edited …" summary.
-const FIELD_LABELS: Record<string, string> = {
-  priority: "Priority",
-  severity: "Severity",
-  area: "Area",
-  iteration: "Iteration",
-  startDate: "Start date",
-  targetDate: "Target date",
-};
-
-function formatFieldValue(field: string, value: unknown): string {
-  if (value === null || value === undefined || value === "") return "None";
-  if (field === "priority" || field === "severity") return LEVEL_LABELS[value as WorkItemLevel] ?? String(value);
-  if (field === "startDate" || field === "targetDate") return formatCalendarDate(String(value));
-  return String(value);
-}
-
-function describeActivity(entry: ActivityEntry): string {
-  if (entry.type === "stage_changed") return "Moved to a different column";
-  if (entry.type === "fields_edited") {
-    const payload = entry.payload as { fields?: Record<string, { from: unknown; to: unknown }> };
-    const fields = payload.fields ?? {};
-    const legacy = Object.keys(fields).filter((f) => !(f in FIELD_LABELS));
-    const parts = [
-      ...(legacy.length > 0 ? [`Edited ${legacy.join(", ")}`] : []),
-      ...Object.entries(fields)
-        .filter(([f]) => f in FIELD_LABELS)
-        .map(([f, c]) => `${FIELD_LABELS[f]}: ${formatFieldValue(f, c.from)} → ${formatFieldValue(f, c.to)}`),
-    ];
-    return parts.length > 0 ? parts.join("; ") : "Edited";
-  }
-  if (entry.type === "closed") {
-    const { stageName, via } = entry.payload as { stageName: string; via: string };
-    if (via === "stage_marked") return `Closed: column ${stageName} marked as closing`;
-    if (via === "created") return `Closed (created in ${stageName})`;
-    return `Closed (moved to ${stageName})`;
-  }
-  if (entry.type === "reopened") {
-    const { stageName, via } = entry.payload as { stageName: string; via: string };
-    if (via === "stage_unmarked") return `Reopened: column ${stageName} unmarked as closing`;
-    return `Reopened (moved to ${stageName})`;
-  }
-  if (entry.type === "parent_linked") return "Linked to a parent Work Item";
-  if (entry.type === "parent_unlinked") return "Unlinked from its parent Work Item";
-  if (entry.type === "related_linked") return "Linked to a related Work Item";
-  if (entry.type === "related_unlinked") return "Unlinked from a related Work Item";
-  return entry.type;
-}
+const describeActivity = (entry: ActivityEntry) => describeWorkItemActivity(entry, formatCalendarDate);
 
 const selectClassName =
   "flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
@@ -108,7 +62,8 @@ export function WorkItemDetailView({
   const canEditRelations = can(initialDetail.role, "relationship:edit");
   const [title, setTitle] = useState(workItem.title);
   const [description, setDescription] = useState(workItem.description ?? "");
-  const [stakeholder, setStakeholder] = useState(workItem.stakeholder ?? "");
+  // 011-agent-access-mcp FR-004 (replaces the free-text stakeholder).
+  const [assigneeUserId, setAssigneeUserId] = useState<string | null>(workItem.assigneeUserId);
   // 008-work-item-fields "Planning" fields, saved with the same Save button.
   const [priority, setPriority] = useState<WorkItemLevel | null>(workItem.priority);
   const [severity, setSeverity] = useState<WorkItemLevel | null>(workItem.severity);
@@ -122,7 +77,7 @@ export function WorkItemDetailView({
   const [savedFields, setSavedFields] = useState(() => ({
     title: workItem.title,
     description: workItem.description ?? "",
-    stakeholder: workItem.stakeholder ?? "",
+    assigneeUserId: workItem.assigneeUserId,
     tags: initialDetail.itemTags,
     priority: workItem.priority,
     severity: workItem.severity,
@@ -146,7 +101,7 @@ export function WorkItemDetailView({
   const currentFields = {
     title,
     description,
-    stakeholder,
+    assigneeUserId,
     tags: selectedTags,
     priority,
     severity,
@@ -233,7 +188,7 @@ export function WorkItemDetailView({
     setPrevWorkItemId(workItem.id);
     setTitle(workItem.title);
     setDescription(workItem.description ?? "");
-    setStakeholder(workItem.stakeholder ?? "");
+    setAssigneeUserId(workItem.assigneeUserId);
     setPriority(workItem.priority);
     setSeverity(workItem.severity);
     setArea(initialDetail.itemArea);
@@ -244,7 +199,7 @@ export function WorkItemDetailView({
     setSavedFields({
       title: workItem.title,
       description: workItem.description ?? "",
-      stakeholder: workItem.stakeholder ?? "",
+      assigneeUserId: workItem.assigneeUserId,
       tags: initialDetail.itemTags,
       priority: workItem.priority,
       severity: workItem.severity,
@@ -334,7 +289,8 @@ export function WorkItemDetailView({
       workItemId: workItem.id,
       title,
       description,
-      stakeholder,
+      // Only when it changed: an unchanged value must not re-notify or re-log (FR-013).
+      ...(assigneeUserId !== savedFields.assigneeUserId ? { assigneeUserId } : {}),
       tagNames: selectedTags,
       priority,
       severity,
@@ -421,12 +377,14 @@ export function WorkItemDetailView({
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="wi-stakeholder">Stakeholder</Label>
-          <Input
-            id="wi-stakeholder"
-            value={stakeholder}
-            onChange={(e) => setStakeholder(e.target.value)}
-            readOnly={!canEdit}
+          <Label htmlFor="wi-assignee">Assignee</Label>
+          <AssigneePicker
+            id="wi-assignee"
+            members={initialDetail.members}
+            value={assigneeUserId}
+            onChange={setAssigneeUserId}
+            disabled={!canEdit}
+            className={selectClassName}
           />
         </div>
         <div className="space-y-1.5">
@@ -701,7 +659,16 @@ export function WorkItemDetailView({
             <Label>Activity</Label>
             <ul className="text-muted-foreground max-h-40 space-y-1 overflow-y-auto text-xs">
               {activity.map((entry) => (
-                <li key={entry.id}>{describeActivity(entry)}</li>
+                <li key={entry.id}>
+                  {describeActivity(entry)}
+                  {entry.actorName && (
+                    <span className="text-muted-foreground/80">
+                      {" "}
+                      — by {entry.actorName}
+                      {entry.agentName && ` via ${entry.agentName}`}
+                    </span>
+                  )}
+                </li>
               ))}
             </ul>
           </div>

@@ -8,6 +8,9 @@
  */
 import { WORK_ITEM_LEVELS, isOverdue, type WorkItemLevel } from "./work-item-fields";
 
+/** A project member as shown next to a Work Item (011-agent-access-mcp FR-007). */
+export type AssigneeView = { userId: string; name: string; image: string | null };
+
 /** One Work Item flattened for display (data-model.md § Fila de vista). */
 export type WorkItemViewRow = {
   id: number;
@@ -25,7 +28,8 @@ export type WorkItemViewRow = {
   areaName: string | null;
   iterationName: string | null;
   tags: string[];
-  stakeholder: string | null;
+  // 011-agent-access-mcp FR-001/FR-008 (replaces `stakeholder`).
+  assignee: AssigneeView | null;
   startDate: string | null;
   targetDate: string | null;
   createdAt: Date;
@@ -38,6 +42,8 @@ export type WorkItemViewOptions = {
   areas: string[];
   iterations: string[];
   tags: string[];
+  // Every current member, for the Assignee filter (011-agent-access-mcp FR-008).
+  members: AssigneeView[];
 };
 
 export const SORT_KEYS = [
@@ -49,7 +55,7 @@ export const SORT_KEYS = [
   "severity",
   "area",
   "iteration",
-  "stakeholder",
+  "assignee",
   "startDate",
   "targetDate",
   "createdAt",
@@ -71,6 +77,8 @@ export type ViewQuery = {
   areas: string[];
   iterations: string[];
   tags: string[];
+  // User ids; "none" = unassigned, "me" = the viewer (011-agent-access-mcp FR-008).
+  assignees: string[];
   overdue: boolean;
   q: string;
   sort: SortKey;
@@ -87,6 +95,8 @@ export type WorkItemTreeNode = {
 };
 
 export const NONE = "none";
+/** Assignee filter value for "Assigned to me" — resolved against the viewer's user id. */
+export const ME = "me";
 
 export const DEFAULT_VIEW_QUERY: ViewQuery = {
   status: null,
@@ -96,6 +106,7 @@ export const DEFAULT_VIEW_QUERY: ViewQuery = {
   areas: [],
   iterations: [],
   tags: [],
+  assignees: [],
   overdue: false,
   q: "",
   sort: "id",
@@ -140,6 +151,8 @@ export function parseViewQuery(params: URLSearchParams, validStagePublicIds: Rea
     areas: list(params, "area"),
     iterations: list(params, "iteration"),
     tags: list(params, "tag"),
+    // User ids are case-sensitive, so dedupe them exactly. An unknown id simply matches nothing.
+    assignees: [...new Set(params.getAll("assignee").map((v) => v.trim()).filter(Boolean))],
     overdue: params.get("overdue") === "1",
     q: (params.get("q") ?? "").trim(),
     sort: (SORT_KEYS as readonly string[]).includes(sort ?? "") ? (sort as SortKey) : DEFAULT_VIEW_QUERY.sort,
@@ -162,6 +175,7 @@ export function serializeViewQuery(query: ViewQuery, view: "list" | "table"): st
   appendAll("area", query.areas);
   appendAll("iteration", query.iterations);
   appendAll("tag", query.tags);
+  appendAll("assignee", query.assignees);
   if (query.overdue) params.set("overdue", "1");
   if (query.q) params.set("q", query.q);
   if (view === "table") {
@@ -181,6 +195,7 @@ export function hasActiveFilters(query: ViewQuery): boolean {
     query.areas.length > 0 ||
     query.iterations.length > 0 ||
     query.tags.length > 0 ||
+    query.assignees.length > 0 ||
     query.overdue ||
     query.q !== ""
   );
@@ -194,6 +209,14 @@ function matchesName(selected: string[], value: string | null): boolean {
   );
 }
 
+function matchesAssignee(selected: string[], userId: string | null, currentUserId: string | null): boolean {
+  return selected.some((s) => {
+    if (s === NONE) return userId === null;
+    if (s === ME) return currentUserId !== null && userId === currentUserId;
+    return userId !== null && s === userId;
+  });
+}
+
 function matchesLevel(selected: LevelFilter[], value: WorkItemLevel | null): boolean {
   if (selected.length === 0) return true;
   return selected.some((s) => (s === NONE ? value === null : s === value));
@@ -203,9 +226,15 @@ function matchesLevel(selected: LevelFilter[], value: WorkItemLevel | null): boo
  * FR-007: filters combine with AND; values inside one filter with OR. With the
  * overdue filter on and `today` still unknown (server render / hydration),
  * nothing can be judged yet, so the result is empty and the UI shows a
- * loading state (research.md § "Vencido").
+ * loading state (research.md § "Vencido"). `currentUserId` resolves the "me"
+ * assignee value; without it "me" matches nothing.
  */
-export function filterWorkItems(rows: WorkItemViewRow[], query: ViewQuery, today: string | null): WorkItemViewRow[] {
+export function filterWorkItems(
+  rows: WorkItemViewRow[],
+  query: ViewQuery,
+  today: string | null,
+  currentUserId: string | null = null,
+): WorkItemViewRow[] {
   if (query.overdue && today === null) return [];
   const q = query.q.toLowerCase();
   const tagNone = query.tags.some((t) => t.toLowerCase() === NONE);
@@ -223,6 +252,9 @@ export function filterWorkItems(rows: WorkItemViewRow[], query: ViewQuery, today
       const rowTags = row.tags.map((t) => t.toLowerCase());
       const ok = (tagNone && rowTags.length === 0) || tagNames.some((t) => rowTags.includes(t));
       if (!ok) return false;
+    }
+    if (query.assignees.length && !matchesAssignee(query.assignees, row.assignee?.userId ?? null, currentUserId)) {
+      return false;
     }
     if (query.overdue && !isOverdue(row.targetDate, row.closedAt, today!)) return false;
     if (q && !row.title.toLowerCase().includes(q) && !row.displayId.toLowerCase().includes(q)) return false;
@@ -252,8 +284,8 @@ function sortValue(row: WorkItemViewRow, key: SortKey): string | number | null {
       return row.areaName;
     case "iteration":
       return row.iterationName;
-    case "stakeholder":
-      return row.stakeholder || null;
+    case "assignee":
+      return row.assignee?.name ?? null;
     case "startDate":
       return row.startDate;
     case "targetDate":
@@ -265,7 +297,7 @@ function sortValue(row: WorkItemViewRow, key: SortKey): string | number | null {
   }
 }
 
-const TEXT_KEYS: ReadonlySet<SortKey> = new Set(["title", "area", "iteration", "stakeholder"]);
+const TEXT_KEYS: ReadonlySet<SortKey> = new Set(["title", "area", "iteration", "assignee"]);
 
 /**
  * FR-006: priority/severity by level (Critical first in asc), the board

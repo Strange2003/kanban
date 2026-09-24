@@ -13,6 +13,7 @@ import {
   addColumn,
   addWorkItem,
   clickUntilVisible,
+  stageColumn,
 } from "./helpers";
 
 // quickstart.md of 007-roles-permissions, one describe block per user story.
@@ -116,7 +117,7 @@ test.describe("Roles — a Viewer is read-only (US2)", () => {
     // Dragging a card does nothing, and it's still where it was after a reload.
     await dragWorkItemToColumn(viewerPage, "Alpha task", "Doing", { waitForSave: false });
     await viewerPage.reload();
-    const todoColumn = viewerPage.locator('[data-testid="stage-column"]', { hasText: "To do" });
+    const todoColumn = stageColumn(viewerPage, "To do");
     await expect(todoColumn.getByText("Alpha task")).toBeVisible();
 
     // Double-clicking a column name doesn't open the rename editor.
@@ -185,7 +186,7 @@ test.describe("Roles — a Viewer is read-only (US2)", () => {
     await expect(memberPage.getByText(/Your role in this project \(Viewer\) doesn't allow this action/)).toBeVisible();
 
     // The card is back in its column and the refreshed board is read-only.
-    const todoColumn = memberPage.locator('[data-testid="stage-column"]', { hasText: "To do" });
+    const todoColumn = stageColumn(memberPage, "To do");
     await expect(todoColumn.getByText("Movable task")).toBeVisible();
     await expect(memberPage.getByRole("button", { name: "+ Add column" })).toBeHidden();
     await expect(memberPage.getByRole("status").filter({ hasText: /read-only/i })).toBeVisible();

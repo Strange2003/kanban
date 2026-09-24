@@ -37,6 +37,17 @@ export async function signUpNewUser(page: Page, namePrefix = "Test User"): Promi
   return email;
 }
 
+/**
+ * A board column found by its title. Matching by any text inside it isn't
+ * enough: every card's "Move to column" selector lists all column names, so
+ * `hasText: "Doing"` would also match the column that holds such a card.
+ */
+export function stageColumn(page: Page, name: string): Locator {
+  return page
+    .locator('[data-testid="stage-column"]')
+    .filter({ has: page.getByRole("heading", { name, exact: true, level: 3 }) });
+}
+
 /** Creates a project from the sidebar dialog and waits for the board to load. Returns its URL. */
 export async function createProjectViaUi(page: Page, name: string): Promise<string> {
   await page.getByRole("button", { name: "New project" }).click();
@@ -191,7 +202,7 @@ export async function dragWorkItemToColumn(
   options?: { waitForSave?: boolean },
 ) {
   const card = page.locator('[data-testid="work-item-card"]', { hasText: workItemTitle });
-  const column = page.locator('[data-testid="stage-column"]', { hasText: columnName });
+  const column = stageColumn(page, columnName);
 
   const from = await card.boundingBox();
   const to = await column.boundingBox();

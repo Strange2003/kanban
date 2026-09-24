@@ -33,7 +33,7 @@ function row(over: Partial<WorkItemViewRow> = {}): WorkItemViewRow {
     areaName: null,
     iterationName: null,
     tags: [],
-    stakeholder: null,
+    assignee: null,
     startDate: null,
     targetDate: null,
     createdAt: new Date("2026-09-01T00:00:00Z"),
@@ -262,5 +262,45 @@ describe("buildWorkItemTree (FR-012, FR-015, SC-006)", () => {
     const ids = flatten(buildWorkItemTree(chain, null));
     expect(ids).toHaveLength(500);
     expect(new Set(ids).size).toBe(500);
+  });
+});
+
+// 011-agent-access-mcp FR-008: the Assignee filter and sort of the List and Table.
+describe("assignee filter and sort (011-agent-access-mcp FR-008)", () => {
+  const ana = { userId: "u-ana", name: "Ana", image: null };
+  const beto = { userId: "u-beto", name: "beto", image: null };
+  const rows = [
+    row({ displayNumber: 1, assignee: beto }),
+    row({ displayNumber: 2, assignee: null }),
+    row({ displayNumber: 3, assignee: ana, priority: "high" }),
+    row({ displayNumber: 4, assignee: ana }),
+  ];
+
+  it("filters by member, by 'none' (unassigned) and by 'me', values combining with OR", () => {
+    expect(numbers(filterWorkItems(rows, q({ assignees: ["u-beto"] }), null))).toEqual([1]);
+    expect(numbers(filterWorkItems(rows, q({ assignees: ["none"] }), null))).toEqual([2]);
+    expect(numbers(filterWorkItems(rows, q({ assignees: ["me"] }), null, "u-ana"))).toEqual([3, 4]);
+    expect(numbers(filterWorkItems(rows, q({ assignees: ["me", "none"] }), null, "u-ana"))).toEqual([2, 3, 4]);
+  });
+
+  it("'me' matches nothing when the viewer is unknown", () => {
+    expect(filterWorkItems(rows, q({ assignees: ["me"] }), null)).toEqual([]);
+  });
+
+  it("combines with the other filters with AND", () => {
+    expect(numbers(filterWorkItems(rows, q({ assignees: ["u-ana"], priorities: ["high"] }), null))).toEqual([3]);
+  });
+
+  it("round-trips through the address and counts as an active filter", () => {
+    const query = q({ assignees: ["me", "none", "u-beto"] });
+    const text = serializeViewQuery(query, "table");
+    expect(text).toBe("assignee=me&assignee=none&assignee=u-beto");
+    expect(parseViewQuery(new URLSearchParams(text), STAGES).assignees).toEqual(["me", "none", "u-beto"]);
+    expect(hasActiveFilters(query)).toBe(true);
+  });
+
+  it("sorts by assignee name case-insensitively, unassigned always last", () => {
+    expect(numbers(sortWorkItems(rows, "assignee", "asc"))).toEqual([3, 4, 1, 2]);
+    expect(numbers(sortWorkItems(rows, "assignee", "desc"))).toEqual([1, 3, 4, 2]);
   });
 });

@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { Resend } from "resend";
 import { db } from "@/db/client";
 import { applyPendingInvitationsForUser } from "@/lib/invitations";
+import { authPlugins } from "@/lib/auth-plugins";
+import { APP_BASE_URL } from "@/lib/mcp/config";
 
 if (!process.env.RESEND_API_KEY) {
   throw new Error("RESEND_API_KEY is not set. Copy .env.example to .env.local and fill it in.");
@@ -17,9 +19,17 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const emailFrom = process.env.EMAIL_FROM ?? "Kanban <onboarding@resend.dev>";
 
 export const auth = betterAuth({
-  baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
+  baseURL: APP_BASE_URL,
   secret: process.env.BETTER_AUTH_SECRET,
   database: drizzleAdapter(db, { provider: "pg" }),
+
+  // The OAuth provider's token endpoint is /oauth2/token; the jwt plugin's own
+  // session-to-JWT /token endpoint isn't used and is kept off.
+  disabledPaths: ["/token"],
+
+  // 011-agent-access-mcp: OAuth 2.1 authorization server for AI agents
+  // (see lib/auth-plugins.ts).
+  plugins: authPlugins,
 
   // FR-001/FR-002/FR-003 of 001-accounts-invitations
   emailAndPassword: {

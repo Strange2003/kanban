@@ -44,14 +44,14 @@ describe("requireProjectMember", () => {
     await expect(requireProjectMember("proj-1")).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
-  it("returns the session, project, and membership when the user is a member", async () => {
+  it("returns the actor, project, and membership when the user is a member", async () => {
     const session = { user: { id: "u1" } };
     const project = { id: 1, publicId: "proj-1" };
     const membership = { projectId: 1, userId: "u1", role: "member" };
     mockGetSession.mockResolvedValue(session);
     mockSelect.mockReturnValueOnce(chain([project])).mockReturnValueOnce(chain([membership]));
 
-    await expect(requireProjectMember("proj-1")).resolves.toEqual({ session, project, membership });
+    await expect(requireProjectMember("proj-1")).resolves.toEqual({ actor: { userId: "u1", agent: null }, project, membership });
   });
 });
 
@@ -109,11 +109,11 @@ describe("requireProjectPermission", () => {
     });
   });
 
-  it("returns the session, project and membership when the role has the permission", async () => {
+  it("returns the actor, project and membership when the role has the permission", async () => {
     asMember("member");
 
     const result = await requireProjectPermission("proj-1", "board:edit");
-    expect(result.session).toBe(session);
+    expect(result.actor).toEqual({ userId: session.user.id, agent: null });
     expect(result.project).toBe(project);
     expect(result.membership).toMatchObject({ role: "member" });
   });

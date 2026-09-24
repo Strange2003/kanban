@@ -18,6 +18,7 @@ import { TargetDateChip } from "@/components/board/TargetDateChip";
 import { LocalDate } from "@/components/ui/local-date";
 import { Button } from "@/components/ui/button";
 import { ViewFilters } from "@/components/views/ViewFilters";
+import { Avatar } from "@/components/ui/avatar";
 import { useViewQuery } from "@/components/views/useViewQuery";
 import { cn } from "@/lib/utils";
 
@@ -32,7 +33,7 @@ const COLUMNS: { label: string; sort: SortKey | null; className?: string }[] = [
   { label: "Area", sort: "area" },
   { label: "Iteration", sort: "iteration" },
   { label: "Tags", sort: null },
-  { label: "Stakeholder", sort: "stakeholder" },
+  { label: "Assignee", sort: "assignee" },
   { label: "Start date", sort: "startDate" },
   { label: "Target date", sort: "targetDate" },
   { label: "Created", sort: "createdAt" },
@@ -48,18 +49,21 @@ export function WorkItemsTable({
   projectPublicId,
   rows,
   options,
+  currentUserId,
 }: {
   projectPublicId: string;
   rows: WorkItemViewRow[];
   options: WorkItemViewOptions;
+  // Resolves the "Assigned to me" filter (FR-008 of 011-agent-access-mcp).
+  currentUserId: string;
 }) {
   const validStages = useMemo(() => new Set(options.stages.map((s) => s.publicId)), [options.stages]);
   const [query, setQuery] = useViewQuery("table", validStages);
   const today = useLocalToday();
 
   const visible = useMemo(
-    () => sortWorkItems(filterWorkItems(rows, query, today), query.sort, query.dir),
-    [rows, query, today],
+    () => sortWorkItems(filterWorkItems(rows, query, today, currentUserId), query.sort, query.dir),
+    [rows, query, today, currentUserId],
   );
   const waitingForToday = query.overdue && today === null;
 
@@ -170,7 +174,16 @@ export function WorkItemsTable({
                       <Empty />
                     )}
                   </td>
-                  <td className="px-3 py-2">{row.stakeholder || <Empty />}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    {row.assignee ? (
+                      <span className="flex items-center gap-1.5">
+                        <Avatar name={row.assignee.name} image={row.assignee.image} size="sm" />
+                        {row.assignee.name}
+                      </span>
+                    ) : (
+                      <Empty />
+                    )}
+                  </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     {row.startDate ? formatCalendarDate(row.startDate) : <Empty />}
                   </td>

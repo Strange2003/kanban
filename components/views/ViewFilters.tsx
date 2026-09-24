@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { LEVEL_LABELS, WORK_ITEM_LEVELS } from "@/lib/work-item-fields";
 import {
   DEFAULT_VIEW_QUERY,
+  ME,
   NONE,
   hasActiveFilters,
   type ViewQuery,
@@ -195,6 +196,17 @@ export function ViewFilters({
         remove: () => set({ [key]: values.filter((v) => v !== value) }),
       });
   }
+  const assigneeChoices = [
+    { value: ME, label: "Assigned to me" },
+    ...options.members.map((m) => ({ value: m.userId, label: m.name })),
+    { value: NONE, label: "Unassigned" },
+  ];
+  for (const value of query.assignees)
+    activeFilters.push({
+      key: `assignee-${value}`,
+      label: `Assignee: ${assigneeChoices.find((c) => c.value === value)?.label ?? value}`,
+      remove: () => set({ assignees: query.assignees.filter((v) => v !== value) }),
+    });
   if (query.overdue)
     activeFilters.push({
       key: "overdue",
@@ -241,6 +253,13 @@ export function ViewFilters({
           choices={levelChoices}
           selected={query.priorities}
           onChange={(v) => set({ priorities: v as ViewQuery["priorities"] })}
+        />
+        {/* FR-008 of 011-agent-access-mcp. */}
+        <MultiSelectFilter
+          label="Assignee"
+          choices={assigneeChoices}
+          selected={query.assignees}
+          onChange={(assignees) => set({ assignees })}
         />
         <label className="flex items-center gap-1.5 text-sm">
           <input

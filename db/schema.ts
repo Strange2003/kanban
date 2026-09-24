@@ -11,6 +11,7 @@ import {
   pgEnum,
   check,
   boolean,
+  foreignKey,
   date,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
@@ -39,7 +40,8 @@ export const invitationStatusEnum = pgEnum("invitation_status", [
   "rejected",
   "cancelled",
 ]);
-export const notificationTypeEnum = pgEnum("notification_type", ["invitation"]);
+// 011-agent-access-mcp FR-011: "work_item_assigned" joins invitations in the same panel.
+export const notificationTypeEnum = pgEnum("notification_type", ["invitation", "work_item_assigned"]);
 // 008-work-item-fields (FR-002/FR-003): two fixed four-level scales. Built from
 // WORK_ITEM_LEVELS, whose order is urgency order — Postgres sorts enums by
 // declaration, so `ORDER BY priority` puts the most urgent first.
@@ -127,7 +129,13 @@ export const notifications = pgTable(
     readAt: timestamp("read_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index("notifications_user_id_idx").on(table.userId)],
+  (table) => [
+    index("notifications_user_id_idx").on(table.userId),
+    // The panel reads "this user's unread, newest first" (011-agent-access-mcp data-model.md).
+    index("notifications_user_unread_idx")
+      .on(table.userId, table.createdAt)
+      .where(sql`${table.readAt} is null`),
+  ],
 );
 
 // --- Stage/Columna (data-model.md § Stage/Columna) ---
@@ -194,7 +202,10 @@ export const workItems = pgTable(
       .references(() => stages.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     description: text("description"),
-    stakeholder: text("stakeholder"),
+    // 011-agent-access-mcp FR-001: at most one CURRENT member of this project
+    // (replaces the free-text `stakeholder`). Enforced by the composite FK
+    // below; null means "Unassigned".
+    assigneeUserId: text("assignee_user_id"),
     position: integer("position").notNull(),
     // 005-work-item-relationships data-model.md § Work Item — nullable
     // self-FK; `onDelete: set null` is what makes deleting a parent leave
@@ -227,6 +238,19 @@ export const workItems = pgTable(
     index("work_items_stage_id_idx").on(table.stageId),
     // Listing a Work Item's children (005-work-item-relationships) filters on this.
     index("work_items_parent_work_item_id_idx").on(table.parentWorkItemId),
+    // "Assigned to me" / agent search, and the FK check when a membership row is deleted.
+    index("work_items_assignee_idx").on(table.projectId, table.assigneeUserId),
+    // FR-005/FR-006/SC-004 of 011-agent-access-mcp: the assignee must be a member
+    // of THIS project, and leaving the project unassigns. The migration's SQL is
+    // edited by hand to `ON DELETE SET NULL ("assignee_user_id")` (Postgres 15+):
+    // a plain SET NULL would also null `project_id`, which is NOT NULL. drizzle
+    // can't express the column list; drizzle-kit diffs against its snapshot, not
+    // the database, so the hand edit is never regenerated away.
+    foreignKey({
+      name: "work_items_assignee_member_fk",
+      columns: [table.projectId, table.assigneeUserId],
+      foreignColumns: [projectMembers.projectId, projectMembers.userId],
+    }).onDelete("set null"),
     // FR-009 of 008-work-item-fields; updateWorkItem checks it first with a friendlier error.
     check(
       "work_items_dates_order_check",
@@ -300,7 +324,27 @@ export const workItemActivity = pgTable(
       .references(() => workItems.id, { onDelete: "cascade" }),
     type: text("type").notNull(),
     payload: jsonb("payload").notNull(),
+    // 011-agent-access-mcp FR-034: who made the change and, if it came through
+    // an AI agent, which one. `agent_name` is copied at write time so the
+    // history stays readable if the OAuth client is renamed or deleted. Always
+    // written through logActivity (lib/activity.ts); null on older rows.
+    actorUserId: text("actor_user_id"),
+    agentClientId: text("agent_client_id"),
+    agentName: text("agent_name"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index("work_item_activity_work_item_id_idx").on(table.workItemId)],
+);
+
+// --- Último uso de un agente (011-agent-access-mcp data-model.md § agent_last_used) ---
+// Touched by app/api/mcp/route.ts at most once a minute per pair (FR-035).
+// No FK to `user`, like every user_id column here (see the note at the top).
+export const agentLastUsed = pgTable(
+  "agent_last_used",
+  {
+    userId: text("user_id").notNull(),
+    clientId: text("client_id").notNull(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.clientId] })],
 );

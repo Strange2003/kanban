@@ -4,11 +4,17 @@ import { revalidatePath } from "next/cache";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
-import { stages, workItems, workItemActivity } from "@/db/schema";
+import { stages, workItems } from "@/db/schema";
+import { logActivity } from "@/lib/activity";
 import { requireProjectMember, requireProjectPermission } from "@/lib/permissions";
 import { generatePublicId } from "@/lib/ids";
 import { AppError, runAction, type Result } from "@/lib/errors";
 import type { WorkItemWithDisplayId } from "@/lib/actions/work-items";
+import type { AssigneeView } from "@/lib/work-item-view";
+import { user } from "@/db/auth-schema";
+
+/** A Work Item on the board, with its assignee (FR-007 of 011-agent-access-mcp). */
+export type BoardWorkItem = WorkItemWithDisplayId & { assignee: AssigneeView | null };
 import type { ProjectRole } from "@/lib/roles";
 
 export type StageWithCount = typeof stages.$inferSelect & { workItemCount: number };
@@ -18,7 +24,7 @@ export type StageWithCount = typeof stages.$inferSelect & { workItemCount: numbe
 // for a Viewer; reading the board itself only needs membership.
 export async function getBoard(
   projectPublicId: string,
-): Promise<Result<{ stages: StageWithCount[]; workItems: WorkItemWithDisplayId[]; role: ProjectRole; projectName: string }>> {
+): Promise<Result<{ stages: StageWithCount[]; workItems: BoardWorkItem[]; role: ProjectRole; projectName: string }>> {
   return runAction(async () => {
     const { project, membership } = await requireProjectMember(projectPublicId);
 
@@ -34,16 +40,21 @@ export async function getBoard(
       .orderBy(asc(stages.position));
 
     const workItemRows = await db
-      .select()
+      .select({ workItem: workItems, assigneeName: user.name, assigneeImage: user.image })
       .from(workItems)
+      .leftJoin(user, eq(user.id, workItems.assigneeUserId))
       .where(eq(workItems.projectId, project.id))
       .orderBy(asc(workItems.position));
 
     return {
       stages: stageRows.map((r) => ({ ...r.stage, workItemCount: r.workItemCount })),
-      workItems: workItemRows.map((wi) => ({
+      workItems: workItemRows.map(({ workItem: wi, assigneeName, assigneeImage }) => ({
         ...wi,
         displayId: `${project.workItemPrefix}-${wi.displayNumber}`,
+        assignee:
+          wi.assigneeUserId !== null
+            ? { userId: wi.assigneeUserId, name: assigneeName ?? "Unknown", image: assigneeImage }
+            : null,
       })),
       role: membership.role,
       projectName: project.name,
@@ -203,7 +214,7 @@ export async function setStageClosing(input: {
 
       // Estándares de Producto y Datos § Auditoría: one event per Work Item, in one insert.
       if (affected.length > 0) {
-        await tx.insert(workItemActivity).values(
+        await logActivity(tx, 
           affected.map(({ id }) =>
             input.isClosing
               ? {

@@ -7,6 +7,8 @@ import { db } from "@/db/client";
 import { projects, projectMembers } from "@/db/schema";
 import { user } from "@/db/auth-schema";
 import { getSession } from "@/lib/auth";
+import { getActor } from "@/lib/actor";
+import { logUnassignOnMemberExitWithinTx } from "@/lib/work-item-assignee";
 import { requireProjectMember, requireProjectPermission } from "@/lib/permissions";
 import { ASSIGNABLE_ROLES, type AssignableRole, type ProjectRole } from "@/lib/roles";
 import { generatePublicId, deriveWorkItemPrefix } from "@/lib/ids";
@@ -84,13 +86,13 @@ export async function listMyProjects(
   query: { search?: string } = {},
 ): Promise<Result<{ personal: ProjectWithMemberCount[]; shared: ProjectWithMemberCount[] }>> {
   return runAction(async () => {
-    const session = await getSession();
-    if (!session) throw new AppError("UNAUTHENTICATED", "You must be signed in.");
+    const actor = await getActor();
+    if (!actor) throw new AppError("UNAUTHENTICATED", "You must be signed in.");
 
     const myProjectIds = db
       .select({ projectId: projectMembers.projectId })
       .from(projectMembers)
-      .where(eq(projectMembers.userId, session.user.id));
+      .where(eq(projectMembers.userId, actor.userId));
 
     const search = query.search?.trim();
 
@@ -188,9 +190,14 @@ export async function removeMember(input: { projectPublicId: string; userId: str
       throw new AppError("CANNOT_REMOVE_OWNER", "The project owner can't be removed.");
     }
 
-    await db
-      .delete(projectMembers)
-      .where(and(eq(projectMembers.projectId, project.id), eq(projectMembers.userId, input.userId)));
+    // FR-006 of 011-agent-access-mcp: their Work Items here become unassigned
+    // (the composite FK's SET NULL) with a "left the project" history entry.
+    await db.transaction(async (tx) => {
+      await logUnassignOnMemberExitWithinTx(tx, { projectId: project.id, userId: input.userId });
+      await tx
+        .delete(projectMembers)
+        .where(and(eq(projectMembers.projectId, project.id), eq(projectMembers.userId, input.userId)));
+    });
 
     revalidatePath(`/projects/${input.projectPublicId}/settings`);
     revalidatePath("/");
@@ -212,11 +219,15 @@ export async function leaveProject(projectPublicId: string): Promise<Result<void
       }
       throw error;
     }
-    const { session, project } = context;
+    const { actor, project } = context;
 
-    await db
-      .delete(projectMembers)
-      .where(and(eq(projectMembers.projectId, project.id), eq(projectMembers.userId, session.user.id)));
+    // FR-006 of 011-agent-access-mcp, as in removeMember.
+    await db.transaction(async (tx) => {
+      await logUnassignOnMemberExitWithinTx(tx, { projectId: project.id, userId: actor.userId });
+      await tx
+        .delete(projectMembers)
+        .where(and(eq(projectMembers.projectId, project.id), eq(projectMembers.userId, actor.userId)));
+    });
 
     revalidatePath("/");
   });
@@ -288,7 +299,7 @@ export async function changeMemberRole(input: {
   role: AssignableRole;
 }): Promise<Result<void>> {
   return runAction(async () => {
-    const { session, project } = await requireProjectPermission(input.projectPublicId, "member:changeRole");
+    const { actor, project } = await requireProjectPermission(input.projectPublicId, "member:changeRole");
 
     const parsed = changeMemberRoleSchema.safeParse({ role: input.role });
     if (!parsed.success) {
@@ -296,7 +307,7 @@ export async function changeMemberRole(input: {
     }
 
     await db.transaction(async (tx) => {
-      const locked = await lockProjectAsOwner(tx, project.id, session.user.id);
+      const locked = await lockProjectAsOwner(tx, project.id, actor.userId);
 
       const [target] = await tx
         .select({ role: projectMembers.role })
@@ -342,14 +353,14 @@ export async function transferOwnership(input: {
   newOwnerUserId: string;
 }): Promise<Result<void>> {
   return runAction(async () => {
-    const { session, project } = await requireProjectPermission(input.projectPublicId, "project:transferOwnership");
+    const { actor, project } = await requireProjectPermission(input.projectPublicId, "project:transferOwnership");
 
-    if (input.newOwnerUserId === session.user.id) {
+    if (input.newOwnerUserId === actor.userId) {
       throw new AppError("CANNOT_TRANSFER_TO_SELF", "You are already the owner of this project.");
     }
 
     await db.transaction(async (tx) => {
-      await lockProjectAsOwner(tx, project.id, session.user.id);
+      await lockProjectAsOwner(tx, project.id, actor.userId);
 
       // Demote BEFORE promoting: project_members_one_owner_idx allows only one
       // `owner` row per project, so promoting first would violate it midway.
@@ -359,7 +370,7 @@ export async function transferOwnership(input: {
         .where(
           and(
             eq(projectMembers.projectId, project.id),
-            eq(projectMembers.userId, session.user.id),
+            eq(projectMembers.userId, actor.userId),
             eq(projectMembers.role, "owner"),
           ),
         )

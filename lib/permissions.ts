@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { projectMembers, projects } from "@/db/schema";
-import { getSession } from "@/lib/auth";
+import { getActor } from "@/lib/actor";
 import { AppError } from "@/lib/errors";
 import { ROLE_LABELS, can, type Permission } from "@/lib/roles";
 
@@ -9,10 +9,13 @@ import { ROLE_LABELS, can, type Permission } from "@/lib/roles";
  * Principle IV of the constitution: every read/write touching a project
  * MUST verify the requesting user's membership first — never trust a
  * client-supplied project id alone.
+ *
+ * The caller is the signed-in user or, inside app/api/mcp/route.ts, the user
+ * an AI agent acts for (lib/actor.ts; FR-020 of 011-agent-access-mcp).
  */
 export async function requireProjectMember(projectPublicId: string) {
-  const session = await getSession();
-  if (!session) {
+  const actor = await getActor();
+  if (!actor) {
     throw new AppError("UNAUTHENTICATED", "You must be signed in.");
   }
 
@@ -29,14 +32,14 @@ export async function requireProjectMember(projectPublicId: string) {
   const [membership] = await db
     .select()
     .from(projectMembers)
-    .where(and(eq(projectMembers.projectId, project.id), eq(projectMembers.userId, session.user.id)))
+    .where(and(eq(projectMembers.projectId, project.id), eq(projectMembers.userId, actor.userId)))
     .limit(1);
 
   if (!membership) {
     throw new AppError("FORBIDDEN", "You are not a member of this project.");
   }
 
-  return { session, project, membership };
+  return { actor, project, membership };
 }
 
 /**

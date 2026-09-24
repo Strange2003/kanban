@@ -18,7 +18,7 @@ export default async function ProjectTablePage({ params }: { params: Promise<{ p
     throw new Error(result.error.message);
   }
 
-  const { rows, options, role, projectName } = result.data;
+  const { rows, options, role, projectName, currentUserId } = result.data;
   return (
     <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
       {/* useSearchParams inside: wrapped per the Next.js guide (use-search-params.md § Prerendering). */}
@@ -27,7 +27,7 @@ export default async function ProjectTablePage({ params }: { params: Promise<{ p
         {options.stages.length === 0 || rows.length === 0 ? (
           <ViewEmptyState projectPublicId={projectPublicId} reason={options.stages.length === 0 ? "no-columns" : "no-items"} />
         ) : (
-          <WorkItemsTable projectPublicId={projectPublicId} rows={rows} options={options} />
+          <WorkItemsTable projectPublicId={projectPublicId} rows={rows} options={options} currentUserId={currentUserId} />
         )}
       </Suspense>
     </div>

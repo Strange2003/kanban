@@ -81,7 +81,7 @@ const baseWorkItem = {
   displayNumber: 3,
   title: "T",
   description: null,
-  stakeholder: null,
+  assigneeUserId: null,
   position: 0,
   parentWorkItemId: null,
   priority: null,
@@ -103,7 +103,15 @@ const stage = (over: Partial<{ id: number; projectId: number; name: string; isCl
 });
 const writesTo = (table: string) => fake.writes.filter((w) => w.table === table);
 
-import { closeWorkItem, getWorkItemByDisplayNumber, moveWorkItem, updateWorkItem } from "@/lib/actions/work-items";
+import {
+  closeWorkItem,
+  createWorkItems,
+  getWorkItemByDisplayNumber,
+  moveWorkItem,
+  updateWorkItem,
+} from "@/lib/actions/work-items";
+import { runAsAgent } from "@/lib/actor";
+import { translateAssigneeFkError } from "@/lib/work-item-assignee";
 
 function chain(result: unknown[]) {
   return { from: () => ({ where: () => ({ limit: () => Promise.resolve(result) }) }) };
@@ -327,5 +335,195 @@ describe("closeWorkItem", () => {
     expect(writesTo("work_item_activity")[1]?.values).toMatchObject({
       payload: { stageName: "Done", via: "close_button" },
     });
+  });
+});
+
+// 011-agent-access-mcp FR-001..FR-013: the Assignee field, its history event
+// and the assignee's in-app notification.
+describe("updateWorkItem — assignee", () => {
+  const BETO = { userId: "u2", name: "Beto" };
+
+  beforeEach(async () => {
+    mockSelect.mockReset();
+    await useFakeDb({ work_items: [baseWorkItem], projects: [PROJECT], project_members: [MEMBER] });
+    // project_members is read twice: the caller's membership, then the names of the people involved.
+    fake.queue.project_members = [[MEMBER], [BETO]];
+    // Two updates: the assignee itself (setAssigneeWithinTx), then `updated_at` with RETURNING.
+    fake.returning.work_items = [[], [{ ...baseWorkItem, assigneeUserId: "u2" }]];
+  });
+
+  it("assigns a member, logs assignee_changed with names and notifies them", async () => {
+    const result = await updateWorkItem({ workItemId: 10, assigneeUserId: "u2" });
+
+    expect(result).toMatchObject({ ok: true, data: { assigneeUserId: "u2" } });
+    expect(writesTo("work_items")[0]?.values).toEqual({ assigneeUserId: "u2" });
+    expect(writesTo("work_item_activity")[0]?.values).toMatchObject({
+      type: "assignee_changed",
+      payload: { from: null, to: BETO },
+      actorUserId: "u1",
+      agentName: null,
+    });
+    expect(writesTo("notifications")[0]?.values).toEqual({
+      userId: "u2",
+      type: "work_item_assigned",
+      payload: { workItemId: 10, projectId: 1, assignedByUserId: "u1", agentName: null },
+    });
+  });
+
+  it("rejects someone who isn't a member of the project with NOT_A_MEMBER and writes nothing", async () => {
+    fake.queue.project_members = [[MEMBER], []];
+
+    const result = await updateWorkItem({ workItemId: 10, assigneeUserId: "stranger" });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "NOT_A_MEMBER" } });
+    expect(fake.writes).toEqual([]);
+  });
+
+  it("unassigns with null, logs it and notifies nobody", async () => {
+    fake.rows.work_items = [{ ...baseWorkItem, assigneeUserId: "u2" }];
+
+    const result = await updateWorkItem({ workItemId: 10, assigneeUserId: null });
+
+    expect(result.ok).toBe(true);
+    expect(writesTo("work_item_activity")[0]?.values).toMatchObject({
+      type: "assignee_changed",
+      payload: { from: BETO, to: null },
+    });
+    expect(writesTo("notifications")).toEqual([]);
+  });
+
+  it("doesn't notify someone who assigns a Work Item to themselves (FR-013)", async () => {
+    fake.queue.project_members = [[MEMBER], [{ userId: "u1", name: "Ana" }]];
+
+    const result = await updateWorkItem({ workItemId: 10, assigneeUserId: "u1" });
+
+    expect(result.ok).toBe(true);
+    expect(writesTo("work_item_activity")).toHaveLength(1);
+    expect(writesTo("notifications")).toEqual([]);
+  });
+
+  it("does nothing when the assignee doesn't change", async () => {
+    fake.rows.work_items = [{ ...baseWorkItem, assigneeUserId: "u2" }];
+
+    await updateWorkItem({ workItemId: 10, assigneeUserId: "u2" });
+
+    expect(fake.writes).toEqual([]);
+  });
+
+  it("attributes an agent's assignment to the user and the agent, in the history and the notification", async () => {
+    const agent = { userId: "u1", agent: { clientId: "client-1", name: "Claude" } };
+
+    const result = await runAsAgent(agent, () => updateWorkItem({ workItemId: 10, assigneeUserId: "u2" }));
+
+    expect(result.ok).toBe(true);
+    expect(writesTo("work_item_activity")[0]?.values).toMatchObject({
+      actorUserId: "u1",
+      agentClientId: "client-1",
+      agentName: "Claude",
+    });
+    expect(writesTo("notifications")[0]?.values).toMatchObject({
+      payload: { assignedByUserId: "u1", agentName: "Claude" },
+    });
+  });
+});
+
+describe("translateAssigneeFkError", () => {
+  it("turns the assignee FK violation (the person left meanwhile) into NOT_A_MEMBER", () => {
+    const error = Object.assign(new Error("fk"), { code: "23503", constraint: "work_items_assignee_member_fk" });
+    expect(translateAssigneeFkError(error)).toMatchObject({ code: "NOT_A_MEMBER" });
+    expect(translateAssigneeFkError({ cause: error })).toMatchObject({ code: "NOT_A_MEMBER" });
+  });
+
+  it("leaves any other error untouched", () => {
+    const other = Object.assign(new Error("other"), { code: "23505" });
+    expect(translateAssigneeFkError(other)).toBe(other);
+  });
+});
+
+// 011-agent-access-mcp FR-029: all-or-nothing batch creation.
+describe("createWorkItems", () => {
+  const created = (n: number) => ({ ...baseWorkItem, id: 100 + n, displayNumber: n, position: n, title: `T${n}` });
+
+  beforeEach(async () => {
+    mockSelect.mockReset();
+    await useFakeDb({ stages: [stage()], projects: [PROJECT], project_members: [MEMBER] });
+    fake.returning.projects = [[{ nextWorkItemNumber: 5 }]];
+    fake.queue.work_items = [[{ maxPosition: 2 }]];
+    fake.returning.work_items = [[created(5), created(4)]];
+  });
+
+  it("rejects an empty batch and one over 50 items", async () => {
+    await expect(createWorkItems({ stagePublicId: "stage-1", items: [] })).resolves.toMatchObject({
+      ok: false,
+      error: { code: "VALIDATION_ERROR" },
+    });
+    const tooMany = Array.from({ length: 51 }, (_, i) => ({ title: `T${i}` }));
+    await expect(createWorkItems({ stagePublicId: "stage-1", items: tooMany })).resolves.toMatchObject({
+      ok: false,
+      error: { code: "VALIDATION_ERROR" },
+    });
+    expect(fake.writes).toEqual([]);
+  });
+
+  it("reports the first invalid item by index and creates nothing", async () => {
+    const result = await createWorkItems({
+      stagePublicId: "stage-1",
+      items: [{ title: "Fine" }, { title: "   " }, { title: "Also fine" }],
+    });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "BATCH_ITEM_INVALID" } });
+    expect(!result.ok && result.error.message).toContain("index 1");
+    expect(fake.writes).toEqual([]);
+  });
+
+  it("reports an assignee who isn't a member by the item's index and creates nothing", async () => {
+    fake.queue.project_members = [[MEMBER], []];
+
+    const result = await createWorkItems({
+      stagePublicId: "stage-1",
+      items: [{ title: "A" }, { title: "B", assigneeUserId: "stranger" }],
+    });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "BATCH_ITEM_INVALID" } });
+    expect(!result.ok && result.error.message).toContain("index 1");
+    expect(fake.writes).toEqual([]);
+  });
+
+  it("rejects an item whose target date is before its start date, by index", async () => {
+    const result = await createWorkItems({
+      stagePublicId: "stage-1",
+      items: [{ title: "A", startDate: "2026-10-10", targetDate: "2026-10-01" }],
+    });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "BATCH_ITEM_INVALID" } });
+    expect(fake.writes).toEqual([]);
+  });
+
+  it("reserves consecutive numbers in one step and appends the items in order", async () => {
+    const result = await createWorkItems({ stagePublicId: "stage-1", items: [{ title: "T4" }, { title: "T5" }] });
+
+    expect(result).toMatchObject({ ok: true });
+    expect(result.ok && result.data.map((w) => w.displayId)).toEqual(["KAN-4", "KAN-5"]);
+    expect(writesTo("projects")).toHaveLength(1);
+    expect(writesTo("work_items")[0]?.values).toMatchObject([
+      { displayNumber: 4, title: "T4", position: 3 },
+      { displayNumber: 5, title: "T5", position: 4 },
+    ]);
+    // Created from the UI: no extra history event (FR-034 only adds `created` for agents).
+    expect(writesTo("work_item_activity")).toEqual([]);
+  });
+
+  it("logs `created` for each Work Item an agent creates", async () => {
+    const agent = { userId: "u1", agent: { clientId: "client-1", name: "Claude" } };
+
+    const result = await runAsAgent(agent, () =>
+      createWorkItems({ stagePublicId: "stage-1", items: [{ title: "T4" }, { title: "T5" }] }),
+    );
+
+    expect(result.ok).toBe(true);
+    expect(writesTo("work_item_activity").map((w) => w.values)).toMatchObject([
+      { workItemId: 104, type: "created", agentName: "Claude" },
+      { workItemId: 105, type: "created", agentName: "Claude" },
+    ]);
   });
 });

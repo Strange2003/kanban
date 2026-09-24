@@ -9,12 +9,13 @@ import {
   dragWorkItemToColumn,
   inviteAndAccept,
   clickUntilVisible,
+  stageColumn,
 } from "./helpers";
 
 // quickstart.md of 008-work-item-fields, one describe block per user story.
 
 const card = (page: Page, title: string) => page.locator('[data-testid="work-item-card"]', { hasText: title });
-const column = (page: Page, name: string) => page.locator('[data-testid="stage-column"]', { hasText: name });
+const column = (page: Page, name: string) => stageColumn(page, name);
 
 /** Saves the detail form and waits for the Server Action and the refresh after it. */
 async function save(page: Page) {

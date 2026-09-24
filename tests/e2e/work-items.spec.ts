@@ -9,6 +9,7 @@ import {
   addColumn,
   addWorkItem,
   clickUntilVisible,
+  stageColumn,
 } from "./helpers";
 
 // quickstart.md bloque 4.
@@ -42,7 +43,7 @@ test.describe("Work Items", () => {
 
     await dragWorkItemToColumn(page, "Design the login screen", "Doing");
 
-    const doingColumn = page.locator('[data-testid="stage-column"]', { hasText: "Doing" });
+    const doingColumn = stageColumn(page, "Doing");
     await expect(doingColumn.getByText("Design the login screen")).toBeVisible();
 
     await page.reload();
@@ -50,7 +51,7 @@ test.describe("Work Items", () => {
   });
 
   // quickstart.md bloque 4, paso 4 (T097).
-  test("edits description/stakeholder, adds an existing and a brand-new tag, and logs both in activity", async ({
+  test("edits the description, adds an existing and a brand-new tag, and logs both in activity", async ({
     page,
   }) => {
     await signUpNewUser(page);
@@ -61,7 +62,6 @@ test.describe("Work Items", () => {
     await openCard(page, "Design the login screen");
 
     await page.getByLabel("Description", { exact: true }).fill("Match the new brand colors.");
-    await page.getByLabel("Stakeholder", { exact: true }).fill("Product team");
     await page.getByPlaceholder("Add a tag...").fill("design");
     await page.getByRole("button", { name: 'Create "design"' }).click();
     await page.getByRole("button", { name: "Save" }).click();
@@ -84,7 +84,7 @@ test.describe("Work Items", () => {
       timeout: 15000,
     });
     // One save logs one "fields_edited" entry listing every changed field, e.g.
-    // "Edited tags, description, stakeholder".
+    // "Edited tags, description".
     await expect(page.getByText(/^Edited .*\bdescription\b/)).toBeVisible();
     await expect(page.getByText(/^Edited .*\btags\b/)).toBeVisible();
   });

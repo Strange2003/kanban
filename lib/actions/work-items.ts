@@ -4,13 +4,27 @@ import { revalidatePath } from "next/cache";
 import { and, asc, desc, eq, gt, gte, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
-import { workItems, stages, projects, workItemActivity, tags, workItemTags, areas, iterations } from "@/db/schema";
+import {
+  workItems,
+  stages,
+  projects,
+  projectMembers,
+  workItemActivity,
+  tags,
+  workItemTags,
+  areas,
+  iterations,
+} from "@/db/schema";
+import { user } from "@/db/auth-schema";
+import { logActivity } from "@/lib/activity";
 import { requireProjectMember, requireProjectPermission } from "@/lib/permissions";
 import { AppError, runAction, type Result } from "@/lib/errors";
 import { getWorkItemAndProject } from "@/lib/work-item-queries";
 import { resolveCatalogValue, type CatalogKind } from "@/lib/work-item-catalogs";
 import { WORK_ITEM_LEVELS, type WorkItemLevel } from "@/lib/work-item-fields";
 import { nextClosedAt } from "@/lib/work-item-closing";
+import { setAssigneeWithinTx, translateAssigneeFkError } from "@/lib/work-item-assignee";
+import { getActor } from "@/lib/actor";
 
 export type WorkItemWithDisplayId = typeof workItems.$inferSelect & { displayId: string };
 
@@ -68,19 +82,19 @@ async function moveWithinTx(
     .where(eq(workItems.id, workItem.id));
 
   // Estándares de Producto y Datos § Auditoría de la constitución.
-  await tx.insert(workItemActivity).values({
+  await logActivity(tx, {
     workItemId: workItem.id,
     type: "stage_changed",
     payload: { fromStageId: fromStage.id, toStageId: toStage.id },
   });
   if (transition.event === "closed") {
-    await tx.insert(workItemActivity).values({
+    await logActivity(tx, {
       workItemId: workItem.id,
       type: "closed",
       payload: { closedAt: transition.closedAt.toISOString(), stageName: toStage.name, via },
     });
   } else if (transition.event === "reopened") {
-    await tx.insert(workItemActivity).values({
+    await logActivity(tx, {
       workItemId: workItem.id,
       type: "reopened",
       payload: { stageName: toStage.name, via: "move" },
@@ -120,73 +134,204 @@ export async function getWorkItemByDisplayNumber(
   });
 }
 
+const levelSchema = z.enum(WORK_ITEM_LEVELS).nullable().optional();
+const calendarDateSchema = z.iso.date("Dates must be valid calendar days (YYYY-MM-DD).").nullable().optional();
+// "" or only spaces means "clear the value", same as sending null.
+const catalogNameSchema = z
+  .string()
+  .nullable()
+  .optional()
+  .transform((v) => (v === undefined ? undefined : v?.trim() || null));
+
+// Every editable field; shared by updateWorkItem and createWorkItems.
+const workItemFieldsSchema = z.object({
+  title: z.string().trim().min(1, "Title is required.").optional(),
+  description: z.string().optional(),
+  // 011-agent-access-mcp FR-001 (replaces `stakeholder`): `undefined` leaves it
+  // alone, `null` unassigns. Membership is checked in setAssigneeWithinTx.
+  assigneeUserId: z.string().min(1).nullable().optional(),
+  tagNames: z.array(z.string().trim().min(1)).optional(),
+  // 008-work-item-fields: `undefined` leaves a field alone, `null` clears it.
+  priority: levelSchema,
+  severity: levelSchema,
+  areaName: catalogNameSchema,
+  iterationName: catalogNameSchema,
+  startDate: calendarDateSchema,
+  targetDate: calendarDateSchema,
+});
+type WorkItemFields = z.infer<typeof workItemFieldsSchema>;
+type ProjectRow = typeof projects.$inferSelect;
+
+export type WorkItemFieldsInput = {
+  title?: string;
+  description?: string;
+  assigneeUserId?: string | null;
+  tagNames?: string[];
+  priority?: WorkItemLevel | null;
+  severity?: WorkItemLevel | null;
+  areaName?: string | null;
+  iterationName?: string | null;
+  startDate?: string | null;
+  targetDate?: string | null;
+};
+
 const createWorkItemSchema = z.object({
   title: z.string().trim().min(1, "Title is required."),
 });
 
-// FR-001/FR-002/FR-003/FR-004 of 004-work-items
+// FR-001/FR-002/FR-003/FR-004 of 004-work-items. The same path as
+// createWorkItems with one item, so the UI and an AI agent create Work Items
+// identically (FR-033 of 011-agent-access-mcp).
 export async function createWorkItem(input: {
   stagePublicId: string;
   title: string;
 }): Promise<Result<WorkItemWithDisplayId>> {
+  const parsed = createWorkItemSchema.safeParse({ title: input.title });
+  if (!parsed.success) {
+    // Keep the specific code the board's inline form shows (004-work-items).
+    return runAction(async () => {
+      const { project } = await getStageAndProject(input.stagePublicId);
+      await requireProjectPermission(project.publicId, "workItem:edit");
+      throw new AppError("TITLE_REQUIRED", parsed.error.issues[0]?.message ?? "Title is required.");
+    });
+  }
+  const result = await createWorkItems({ stagePublicId: input.stagePublicId, items: [{ title: parsed.data.title }] });
+  return result.ok ? { ok: true, data: result.data[0]! } : result;
+}
+
+/** FR-029 of 011-agent-access-mcp: at most this many Work Items per call. */
+const MAX_BATCH = 50;
+
+const createItemSchema = workItemFieldsSchema.extend({
+  title: z.string().trim().min(1, "Title is required."),
+});
+
+/**
+ * Creates 1..50 Work Items at the end of one column, in order, all or nothing
+ * (FR-029 of 011-agent-access-mcp; contracts/app-changes.md § createWorkItems).
+ * Every item is validated BEFORE the transaction opens, so a bad item is
+ * reported by index (BATCH_ITEM_INVALID) and nothing is created; anything that
+ * can only fail inside (an assignee who just left, a deleted column) rolls the
+ * whole batch back. Display numbers are reserved in one step, so they're consecutive.
+ */
+export async function createWorkItems(input: {
+  stagePublicId: string;
+  items: ({ title: string } & WorkItemFieldsInput)[];
+}): Promise<Result<WorkItemWithDisplayId[]>> {
   return runAction(async () => {
     const { stage, project } = await getStageAndProject(input.stagePublicId);
     await requireProjectPermission(project.publicId, "workItem:edit");
 
-    const parsed = createWorkItemSchema.safeParse({ title: input.title });
-    if (!parsed.success) {
-      throw new AppError("TITLE_REQUIRED", parsed.error.issues[0]?.message ?? "Title is required.");
+    const items = Array.isArray(input.items) ? input.items : [];
+    if (items.length === 0 || items.length > MAX_BATCH) {
+      throw new AppError("VALIDATION_ERROR", `Send between 1 and ${MAX_BATCH} Work Items at a time.`);
     }
-
-    const workItem = await db.transaction(async (tx) => {
-      // Atomic per-project counter -> the human-readable displayId (e.g. "KAN-42").
-      const [updatedProject] = await tx
-        .update(projects)
-        .set({ nextWorkItemNumber: sql`${projects.nextWorkItemNumber} + 1` })
-        .where(eq(projects.id, project.id))
-        .returning({ nextWorkItemNumber: projects.nextWorkItemNumber });
-
-      if (!updatedProject) throw new AppError("UNKNOWN_ERROR", "Could not allocate a Work Item number.");
-
-      const [maxRow] = await tx
-        .select({ maxPosition: sql<number | null>`max(${workItems.position})` })
-        .from(workItems)
-        .where(eq(workItems.stageId, stage.id));
-
-      // Born in a closing column → born closed (008-work-item-fields Edge Cases, FR-013).
-      const lockedStage = (await lockStagesForShare(tx, [stage.id])).get(stage.id) ?? stage;
-      const transition = nextClosedAt({
-        fromIsClosing: null,
-        toIsClosing: lockedStage.isClosing,
-        currentClosedAt: null,
-        now: new Date(),
-      });
-
-      const [created] = await tx
-        .insert(workItems)
-        .values({
-          projectId: project.id,
-          stageId: stage.id,
-          displayNumber: updatedProject.nextWorkItemNumber,
-          title: parsed.data.title,
-          position: (maxRow?.maxPosition ?? -1) + 1,
-          closedAt: transition.closedAt,
-        })
-        .returning();
-
-      if (!created) throw new AppError("UNKNOWN_ERROR", "Could not create the Work Item.");
-      if (transition.event === "closed") {
-        await tx.insert(workItemActivity).values({
-          workItemId: created.id,
-          type: "closed",
-          payload: { closedAt: transition.closedAt.toISOString(), stageName: lockedStage.name, via: "created" },
-        });
+    const parsedItems = items.map((item, index) => {
+      const parsed = createItemSchema.safeParse(item);
+      const problem = !parsed.success
+        ? (parsed.error.issues[0]?.message ?? "Invalid input.")
+        : parsed.data.startDate && parsed.data.targetDate && parsed.data.targetDate < parsed.data.startDate
+          ? "The target date can't be before the start date."
+          : null;
+      if (problem || !parsed.success) {
+        throw new AppError("BATCH_ITEM_INVALID", `Item at index ${index} ("${item?.title ?? ""}"): ${problem}`);
       }
-      return created;
+      return parsed.data;
     });
 
+    // Report a non-member assignee by index too, before anything is written.
+    // (The composite FK still guards the race where someone leaves meanwhile.)
+    const assigneeIds = [...new Set(parsedItems.flatMap((item) => (item.assigneeUserId ? [item.assigneeUserId] : [])))];
+    if (assigneeIds.length > 0) {
+      const members = await db
+        .select({ userId: projectMembers.userId })
+        .from(projectMembers)
+        .where(and(eq(projectMembers.projectId, project.id), inArray(projectMembers.userId, assigneeIds)));
+      const memberIds = new Set(members.map((m) => m.userId));
+      const index = parsedItems.findIndex((item) => item.assigneeUserId && !memberIds.has(item.assigneeUserId));
+      if (index !== -1) {
+        throw new AppError(
+          "BATCH_ITEM_INVALID",
+          `Item at index ${index} ("${parsedItems[index]!.title}"): the assignee isn't a member of this project.`,
+        );
+      }
+    }
+
+    const actor = await getActor();
+    let created: WorkItemRow[];
+    try {
+      created = await db.transaction(async (tx) => {
+        // Atomic per-project counter -> the human-readable displayIds (e.g. "KAN-42"),
+        // reserved for the whole batch at once so they're consecutive.
+        const [updatedProject] = await tx
+          .update(projects)
+          .set({ nextWorkItemNumber: sql`${projects.nextWorkItemNumber} + ${parsedItems.length}` })
+          .where(eq(projects.id, project.id))
+          .returning({ nextWorkItemNumber: projects.nextWorkItemNumber });
+        if (!updatedProject) throw new AppError("UNKNOWN_ERROR", "Could not allocate a Work Item number.");
+        const firstNumber = updatedProject.nextWorkItemNumber - parsedItems.length + 1;
+
+        const [maxRow] = await tx
+          .select({ maxPosition: sql<number | null>`max(${workItems.position})` })
+          .from(workItems)
+          .where(eq(workItems.stageId, stage.id));
+        const firstPosition = (maxRow?.maxPosition ?? -1) + 1;
+
+        // Born in a closing column → born closed (008-work-item-fields Edge Cases, FR-013).
+        const lockedStage = (await lockStagesForShare(tx, [stage.id])).get(stage.id);
+        if (!lockedStage) throw new AppError("NOT_FOUND", "Column not found.");
+        const transition = nextClosedAt({
+          fromIsClosing: null,
+          toIsClosing: lockedStage.isClosing,
+          currentClosedAt: null,
+          now: new Date(),
+        });
+
+        const rows = await tx
+          .insert(workItems)
+          .values(
+            parsedItems.map((item, index) => ({
+              projectId: project.id,
+              stageId: stage.id,
+              displayNumber: firstNumber + index,
+              title: item.title,
+              position: firstPosition + index,
+              closedAt: transition.closedAt,
+            })),
+          )
+          .returning();
+        if (rows.length !== parsedItems.length) throw new AppError("UNKNOWN_ERROR", "Could not create the Work Items.");
+        rows.sort((a, b) => a.displayNumber - b.displayNumber);
+
+        const result: WorkItemRow[] = [];
+        for (const [index, row] of rows.entries()) {
+          // FR-034 of 011: an agent's creation is attributed like any other change.
+          if (actor?.agent) {
+            await logActivity(tx, {
+              workItemId: row.id,
+              type: "created",
+              payload: { stageName: lockedStage.name, via: "agent" },
+            });
+          }
+          if (transition.event === "closed") {
+            await logActivity(tx, {
+              workItemId: row.id,
+              type: "closed",
+              payload: { closedAt: transition.closedAt.toISOString(), stageName: lockedStage.name, via: "created" },
+            });
+          }
+          const { title: _title, ...fields } = parsedItems[index]!;
+          const hasFields = Object.values(fields).some((value) => value !== undefined);
+          result.push(hasFields ? await applyWorkItemFieldsWithinTx(tx, project, row, fields) : row);
+        }
+        return result;
+      });
+    } catch (error) {
+      throw translateAssigneeFkError(error);
+    }
+
     revalidatePath(`/projects/${project.publicId}`);
-    return { ...workItem, displayId: `${project.workItemPrefix}-${workItem.displayNumber}` };
+    return created.map((row) => ({ ...row, displayId: `${project.workItemPrefix}-${row.displayNumber}` }));
   });
 }
 
@@ -303,180 +448,164 @@ export async function reorderWorkItemsInStage(input: {
   });
 }
 
-const levelSchema = z.enum(WORK_ITEM_LEVELS).nullable().optional();
-const calendarDateSchema = z.iso.date("Dates must be valid calendar days (YYYY-MM-DD).").nullable().optional();
-// "" or only spaces means "clear the value", same as sending null.
-const catalogNameSchema = z
-  .string()
-  .nullable()
-  .optional()
-  .transform((v) => (v === undefined ? undefined : v?.trim() || null));
-
-const updateWorkItemSchema = z.object({
-  title: z.string().trim().min(1, "Title is required.").optional(),
-  description: z.string().optional(),
-  stakeholder: z.string().optional(),
-  tagNames: z.array(z.string().trim().min(1)).optional(),
-  // 008-work-item-fields: `undefined` leaves a field alone, `null` clears it.
-  priority: levelSchema,
-  severity: levelSchema,
-  areaName: catalogNameSchema,
-  iterationName: catalogNameSchema,
-  startDate: calendarDateSchema,
-  targetDate: calendarDateSchema,
-});
-
 // The Work Item's current area/iteration name, for the change check and the
 // activity payload (which records names, not ids — data-model.md § Log de actividad).
-async function catalogNameById(kind: CatalogKind, id: number | null): Promise<string | null> {
+async function catalogNameById(reader: Tx, kind: CatalogKind, id: number | null): Promise<string | null> {
   if (id === null) return null;
   const table = kind === "area" ? areas : iterations;
-  const [row] = await db.select({ name: table.name }).from(table).where(eq(table.id, id)).limit(1);
+  const [row] = await reader.select({ name: table.name }).from(table).where(eq(table.id, id)).limit(1);
   return row?.name ?? null;
 }
 
+/**
+ * Applies already-validated field changes to one Work Item inside `tx` — the
+ * single implementation behind updateWorkItem and the optional fields of
+ * createWorkItems, so both paths (and an AI agent using either) follow exactly
+ * the same rules (FR-033 of 011-agent-access-mcp). Logs `fields_edited` and
+ * `assignee_changed`. NOT exported: every export of a "use server" file is a
+ * public endpoint (AGENTS.md); callers check the permission first.
+ */
+async function applyWorkItemFieldsWithinTx(
+  tx: Tx,
+  project: ProjectRow,
+  workItem: WorkItemRow,
+  data: WorkItemFields,
+): Promise<WorkItemRow> {
+  const changedFields: Record<string, { from: unknown; to: unknown }> = {};
+  const updates: Partial<typeof workItems.$inferInsert> = {};
+
+  if (data.title !== undefined && data.title !== workItem.title) {
+    changedFields.title = { from: workItem.title, to: data.title };
+    updates.title = data.title;
+  }
+  if (data.description !== undefined && data.description !== (workItem.description ?? "")) {
+    changedFields.description = { from: workItem.description, to: data.description };
+    updates.description = data.description || null;
+  }
+  if (data.priority !== undefined && data.priority !== workItem.priority) {
+    changedFields.priority = { from: workItem.priority, to: data.priority };
+    updates.priority = data.priority;
+  }
+  if (data.severity !== undefined && data.severity !== workItem.severity) {
+    changedFields.severity = { from: workItem.severity, to: data.severity };
+    updates.severity = data.severity;
+  }
+
+  // FR-009 of 008: judged on the RESULTING pair, so changing only one date
+  // can't leave the target before the start. The DB CHECK backs this up.
+  const nextStartDate = data.startDate !== undefined ? data.startDate : workItem.startDate;
+  const nextTargetDate = data.targetDate !== undefined ? data.targetDate : workItem.targetDate;
+  if (nextStartDate && nextTargetDate && nextTargetDate < nextStartDate) {
+    throw new AppError("INVALID_DATE_RANGE", "The target date can't be before the start date.");
+  }
+  if (data.startDate !== undefined && data.startDate !== workItem.startDate) {
+    changedFields.startDate = { from: workItem.startDate, to: data.startDate };
+    updates.startDate = data.startDate;
+  }
+  if (data.targetDate !== undefined && data.targetDate !== workItem.targetDate) {
+    changedFields.targetDate = { from: workItem.targetDate, to: data.targetDate };
+    updates.targetDate = data.targetDate;
+  }
+
+  const catalogChanges: { kind: CatalogKind; name: string | null }[] = [];
+  for (const kind of ["area", "iteration"] as const) {
+    const requested = kind === "area" ? data.areaName : data.iterationName;
+    if (requested === undefined) continue;
+    const current = await catalogNameById(tx, kind, kind === "area" ? workItem.areaId : workItem.iterationId);
+    // Same value in a different case ("FRONTEND" for "Frontend") is no change.
+    if ((current ?? "").toLowerCase() === (requested ?? "").toLowerCase()) continue;
+    catalogChanges.push({ kind, name: requested });
+    changedFields[kind] = { from: current, to: requested };
+  }
+
+  // FR-006/FR-021 of 008: names are resolved (reused case-insensitively or
+  // created) only within this Work Item's own project — never from a client-sent id.
+  for (const { kind, name } of catalogChanges) {
+    const value = name === null ? null : await resolveCatalogValue(tx, kind, project.id, name);
+    if (kind === "area") updates.areaId = value?.id ?? null;
+    else updates.iterationId = value?.id ?? null;
+    // Log the catalog's own spelling when an existing value was reused.
+    if (value) (changedFields[kind] as { to: unknown }).to = value.name;
+  }
+
+  // 011-agent-access-mcp FR-004..FR-013: its own event and notification.
+  const assigneeChanged = await setAssigneeWithinTx(tx, { workItem, assigneeUserId: data.assigneeUserId });
+
+  let current = workItem;
+  if (Object.keys(updates).length > 0 || assigneeChanged) {
+    const [row] = await tx
+      .update(workItems)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(workItems.id, workItem.id))
+      .returning();
+    if (!row) throw new AppError("UNKNOWN_ERROR", "Could not update the Work Item.");
+    current = row;
+  }
+
+  // FR-012 of 004: reuse existing catalog tags (case-insensitive), create the rest.
+  if (data.tagNames !== undefined) {
+    const currentTagRows = await tx
+      .select({ name: tags.name })
+      .from(workItemTags)
+      .innerJoin(tags, eq(tags.id, workItemTags.tagId))
+      .where(eq(workItemTags.workItemId, workItem.id));
+    const currentNames = currentTagRows.map((t) => t.name).sort();
+    const nextNames = [...new Set(data.tagNames.map((n) => n.trim()).filter(Boolean))].sort();
+
+    if (JSON.stringify(currentNames) !== JSON.stringify(nextNames)) {
+      const resolvedTagIds: number[] = [];
+      for (const name of nextNames) {
+        const [existingTag] = await tx
+          .select()
+          .from(tags)
+          .where(and(eq(tags.projectId, project.id), sql`lower(${tags.name}) = lower(${name})`))
+          .limit(1);
+        const tag = existingTag ?? (await tx.insert(tags).values({ projectId: project.id, name }).returning())[0];
+        if (tag) resolvedTagIds.push(tag.id);
+      }
+
+      await tx.delete(workItemTags).where(eq(workItemTags.workItemId, workItem.id));
+      if (resolvedTagIds.length > 0) {
+        await tx.insert(workItemTags).values(resolvedTagIds.map((tagId) => ({ workItemId: workItem.id, tagId })));
+      }
+      changedFields.tags = { from: currentNames, to: nextNames };
+    }
+  }
+
+  // Estándares de Producto y Datos § Auditoría de la constitución.
+  if (Object.keys(changedFields).length > 0) {
+    await logActivity(tx, {
+      workItemId: workItem.id,
+      type: "fields_edited",
+      payload: { fields: changedFields },
+    });
+  }
+
+  return current;
+}
+
 // FR-007/FR-008/FR-009/FR-012/FR-013 of 004-work-items, extended with the
-// fields of 008-work-item-fields (FR-001..FR-009, FR-020). `closedAt` is
-// deliberately not an input: only the closing transitions write it (FR-013).
-export async function updateWorkItem(input: {
-  workItemId: number;
-  title?: string;
-  description?: string;
-  stakeholder?: string;
-  tagNames?: string[];
-  priority?: WorkItemLevel | null;
-  severity?: WorkItemLevel | null;
-  areaName?: string | null;
-  iterationName?: string | null;
-  startDate?: string | null;
-  targetDate?: string | null;
-}): Promise<Result<WorkItemWithDisplayId>> {
+// fields of 008-work-item-fields (FR-001..FR-009, FR-020) and the assignee of
+// 011-agent-access-mcp. `closedAt` is deliberately not an input: only the
+// closing transitions write it (FR-013 of 008).
+export async function updateWorkItem(
+  input: { workItemId: number } & WorkItemFieldsInput,
+): Promise<Result<WorkItemWithDisplayId>> {
   return runAction(async () => {
     const { workItem, project } = await getWorkItemAndProject(input.workItemId);
     await requireProjectPermission(project.publicId, "workItem:edit");
 
-    const parsed = updateWorkItemSchema.safeParse(input);
+    const parsed = workItemFieldsSchema.safeParse(input);
     if (!parsed.success) {
       throw new AppError("VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "Invalid input.");
     }
 
-    const changedFields: Record<string, { from: unknown; to: unknown }> = {};
-    const updates: Partial<typeof workItems.$inferInsert> = {};
-
-    if (parsed.data.title !== undefined && parsed.data.title !== workItem.title) {
-      changedFields.title = { from: workItem.title, to: parsed.data.title };
-      updates.title = parsed.data.title;
+    let updated: WorkItemRow;
+    try {
+      updated = await db.transaction((tx) => applyWorkItemFieldsWithinTx(tx, project, workItem, parsed.data));
+    } catch (error) {
+      throw translateAssigneeFkError(error);
     }
-    if (parsed.data.description !== undefined && parsed.data.description !== (workItem.description ?? "")) {
-      changedFields.description = { from: workItem.description, to: parsed.data.description };
-      updates.description = parsed.data.description || null;
-    }
-    if (parsed.data.stakeholder !== undefined && parsed.data.stakeholder !== (workItem.stakeholder ?? "")) {
-      changedFields.stakeholder = { from: workItem.stakeholder, to: parsed.data.stakeholder };
-      updates.stakeholder = parsed.data.stakeholder || null;
-    }
-    if (parsed.data.priority !== undefined && parsed.data.priority !== workItem.priority) {
-      changedFields.priority = { from: workItem.priority, to: parsed.data.priority };
-      updates.priority = parsed.data.priority;
-    }
-    if (parsed.data.severity !== undefined && parsed.data.severity !== workItem.severity) {
-      changedFields.severity = { from: workItem.severity, to: parsed.data.severity };
-      updates.severity = parsed.data.severity;
-    }
-
-    // FR-009: judged on the RESULTING pair, so changing only one date can't
-    // leave the target before the start. The DB CHECK backs this up.
-    const nextStartDate = parsed.data.startDate !== undefined ? parsed.data.startDate : workItem.startDate;
-    const nextTargetDate = parsed.data.targetDate !== undefined ? parsed.data.targetDate : workItem.targetDate;
-    if (nextStartDate && nextTargetDate && nextTargetDate < nextStartDate) {
-      throw new AppError("INVALID_DATE_RANGE", "The target date can't be before the start date.");
-    }
-    if (parsed.data.startDate !== undefined && parsed.data.startDate !== workItem.startDate) {
-      changedFields.startDate = { from: workItem.startDate, to: parsed.data.startDate };
-      updates.startDate = parsed.data.startDate;
-    }
-    if (parsed.data.targetDate !== undefined && parsed.data.targetDate !== workItem.targetDate) {
-      changedFields.targetDate = { from: workItem.targetDate, to: parsed.data.targetDate };
-      updates.targetDate = parsed.data.targetDate;
-    }
-
-    const catalogChanges: { kind: CatalogKind; name: string | null }[] = [];
-    for (const kind of ["area", "iteration"] as const) {
-      const requested = kind === "area" ? parsed.data.areaName : parsed.data.iterationName;
-      if (requested === undefined) continue;
-      const current = await catalogNameById(kind, kind === "area" ? workItem.areaId : workItem.iterationId);
-      // Same value in a different case ("FRONTEND" for "Frontend") is no change.
-      if ((current ?? "").toLowerCase() === (requested ?? "").toLowerCase()) continue;
-      catalogChanges.push({ kind, name: requested });
-      changedFields[kind] = { from: current, to: requested };
-    }
-
-    const updated = await db.transaction(async (tx) => {
-      // FR-006/FR-021: names are resolved (reused case-insensitively or created)
-      // only within this Work Item's own project — never from a client-sent id.
-      for (const { kind, name } of catalogChanges) {
-        const value = name === null ? null : await resolveCatalogValue(tx, kind, project.id, name);
-        if (kind === "area") updates.areaId = value?.id ?? null;
-        else updates.iterationId = value?.id ?? null;
-        // Log the catalog's own spelling when an existing value was reused.
-        if (value) (changedFields[kind] as { to: unknown }).to = value.name;
-      }
-
-      let current = workItem;
-      if (Object.keys(updates).length > 0) {
-        const [row] = await tx
-          .update(workItems)
-          .set({ ...updates, updatedAt: new Date() })
-          .where(eq(workItems.id, workItem.id))
-          .returning();
-        if (!row) throw new AppError("UNKNOWN_ERROR", "Could not update the Work Item.");
-        current = row;
-      }
-
-      // FR-012: reuse existing catalog tags (case-insensitive), create the rest.
-      if (parsed.data.tagNames !== undefined) {
-        const currentTagRows = await tx
-          .select({ name: tags.name })
-          .from(workItemTags)
-          .innerJoin(tags, eq(tags.id, workItemTags.tagId))
-          .where(eq(workItemTags.workItemId, workItem.id));
-        const currentNames = currentTagRows.map((t) => t.name).sort();
-        const nextNames = [...new Set(parsed.data.tagNames.map((n) => n.trim()).filter(Boolean))].sort();
-
-        if (JSON.stringify(currentNames) !== JSON.stringify(nextNames)) {
-          const resolvedTagIds: number[] = [];
-          for (const name of nextNames) {
-            const [existingTag] = await tx
-              .select()
-              .from(tags)
-              .where(and(eq(tags.projectId, project.id), sql`lower(${tags.name}) = lower(${name})`))
-              .limit(1);
-            const tag =
-              existingTag ?? (await tx.insert(tags).values({ projectId: project.id, name }).returning())[0];
-            if (tag) resolvedTagIds.push(tag.id);
-          }
-
-          await tx.delete(workItemTags).where(eq(workItemTags.workItemId, workItem.id));
-          if (resolvedTagIds.length > 0) {
-            await tx
-              .insert(workItemTags)
-              .values(resolvedTagIds.map((tagId) => ({ workItemId: workItem.id, tagId })));
-          }
-          changedFields.tags = { from: currentNames, to: nextNames };
-        }
-      }
-
-      // Estándares de Producto y Datos § Auditoría de la constitución.
-      if (Object.keys(changedFields).length > 0) {
-        await tx.insert(workItemActivity).values({
-          workItemId: workItem.id,
-          type: "fields_edited",
-          payload: { fields: changedFields },
-        });
-      }
-
-      return current;
-    });
 
     revalidatePath(`/projects/${project.publicId}`);
     return { ...updated, displayId: `${project.workItemPrefix}-${updated.displayNumber}` };
@@ -506,19 +635,22 @@ export async function getWorkItemTags(workItemId: number): Promise<Result<(typeo
   });
 }
 
+/** One history event plus who made it (FR-034 of 011-agent-access-mcp); `actorName` is null on older rows. */
+export type WorkItemActivityEntry = typeof workItemActivity.$inferSelect & { actorName: string | null };
+
 // Estándares de Producto y Datos § Auditoría de la constitución.
-export async function listWorkItemActivity(
-  workItemId: number,
-): Promise<Result<(typeof workItemActivity.$inferSelect)[]>> {
+export async function listWorkItemActivity(workItemId: number): Promise<Result<WorkItemActivityEntry[]>> {
   return runAction(async () => {
     const { project } = await getWorkItemAndProject(workItemId);
     await requireProjectMember(project.publicId);
 
-    return db
-      .select()
+    const rows = await db
+      .select({ activity: workItemActivity, actorName: user.name })
       .from(workItemActivity)
+      .leftJoin(user, eq(user.id, workItemActivity.actorUserId))
       .where(eq(workItemActivity.workItemId, workItemId))
       .orderBy(desc(workItemActivity.createdAt));
+    return rows.map((row) => ({ ...row.activity, actorName: row.actorName }));
   });
 }
 

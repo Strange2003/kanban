@@ -14,6 +14,7 @@ import {
   type WorkItemViewRow,
 } from "@/lib/work-item-view";
 import { PriorityBadge } from "@/components/board/PriorityBadge";
+import { Avatar } from "@/components/ui/avatar";
 import { TargetDateChip } from "@/components/board/TargetDateChip";
 import { Button } from "@/components/ui/button";
 import { ViewFilters } from "@/components/views/ViewFilters";
@@ -37,10 +38,13 @@ export function WorkItemsList({
   projectPublicId,
   rows,
   options,
+  currentUserId,
 }: {
   projectPublicId: string;
   rows: WorkItemViewRow[];
   options: WorkItemViewOptions;
+  // Resolves the "Assigned to me" filter (FR-008 of 011-agent-access-mcp).
+  currentUserId: string;
 }) {
   const validStages = useMemo(() => new Set(options.stages.map((s) => s.publicId)), [options.stages]);
   const [query, setQuery] = useViewQuery("list", validStages);
@@ -48,7 +52,10 @@ export function WorkItemsList({
   const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(new Set());
 
   const filtering = hasActiveFilters(query);
-  const matches = useMemo(() => filterWorkItems(rows, query, today), [rows, query, today]);
+  const matches = useMemo(
+    () => filterWorkItems(rows, query, today, currentUserId),
+    [rows, query, today, currentUserId],
+  );
   const tree = useMemo(
     () => buildWorkItemTree(rows, filtering ? new Set(matches.map((r) => r.id)) : null),
     [rows, filtering, matches],
@@ -113,6 +120,10 @@ export function WorkItemsList({
             <span className="w-16">{row.priority && <PriorityBadge level={row.priority} />}</span>
             <span className="hidden w-44 md:inline">
               {row.targetDate && <TargetDateChip targetDate={row.targetDate} closedAt={row.closedAt} />}
+            </span>
+            {/* FR-008 of 011-agent-access-mcp. */}
+            <span className="flex w-6 justify-end">
+              {row.assignee && <Avatar name={row.assignee.name} image={row.assignee.image} size="sm" />}
             </span>
           </div>
           {hasChildren && !isCollapsed && <ul role="group">{renderNodes(node.children, level + 1)}</ul>}
