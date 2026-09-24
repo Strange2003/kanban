@@ -14,10 +14,12 @@ type View = "board" | "list" | "table";
 // the settings link that used to live in the board page alone.
 export function ProjectViewHeader({
   projectPublicId,
+  projectName,
   role,
   active,
 }: {
   projectPublicId: string;
+  projectName: string;
   role: ProjectRole;
   active: View;
 }) {
@@ -44,9 +46,18 @@ export function ProjectViewHeader({
   ];
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2">
-      <div className="flex flex-wrap items-center gap-3">
-        <nav aria-label="Views" className="inline-flex rounded-md border border-border p-0.5">
+    <div className="relative flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2 pr-14 sm:pr-4">
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+        <h1
+          className="max-w-[min(60vw,20rem)] truncate text-base font-semibold"
+          title={projectName}
+        >
+          {projectName}
+        </h1>
+        <nav
+          aria-label="Views"
+          className="inline-flex rounded-md border border-border p-0.5"
+        >
           {views.map(({ view, label }) => (
             <Link
               key={view}
@@ -68,7 +79,7 @@ export function ProjectViewHeader({
       <Link
         href={`${base}/settings`}
         aria-label="Project settings"
-        className="hover:bg-accent hover:text-accent-foreground inline-flex h-9 w-9 items-center justify-center rounded-md"
+        className="hover:bg-accent hover:text-accent-foreground absolute top-2 right-4 inline-flex h-9 w-9 items-center justify-center rounded-md sm:static sm:ml-auto"
       >
         <Settings className="h-4 w-4" />
       </Link>

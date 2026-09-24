@@ -137,6 +137,7 @@ test.describe("Views — sortable, filterable table (US2)", () => {
     await page.getByTestId("view-filters").getByRole("button", { name: /^Priority/ }).click();
     await page.getByRole("group", { name: "Priority filter" }).getByLabel("Critical").check();
     await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: /More filters/ }).click();
     await page.getByTestId("view-filters").getByRole("button", { name: /^Iteration/ }).click();
     await page.getByRole("group", { name: "Iteration filter" }).getByLabel("Sprint 12").check();
     await page.keyboard.press("Escape");

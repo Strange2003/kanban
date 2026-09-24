@@ -34,7 +34,8 @@ function MultiSelectFilter({
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
-  const isSelected = (value: string) => selected.some((s) => s.toLowerCase() === value.toLowerCase());
+  const isSelected = (value: string) =>
+    selected.some((s) => s.toLowerCase() === value.toLowerCase());
 
   useEffect(() => {
     if (!open) return;
@@ -46,7 +47,11 @@ function MultiSelectFilter({
   }, [open]);
 
   function toggle(value: string) {
-    onChange(isSelected(value) ? selected.filter((s) => s.toLowerCase() !== value.toLowerCase()) : [...selected, value]);
+    onChange(
+      isSelected(value)
+        ? selected.filter((s) => s.toLowerCase() !== value.toLowerCase())
+        : [...selected, value],
+    );
   }
 
   return (
@@ -72,7 +77,9 @@ function MultiSelectFilter({
         className={cn(selected.length > 0 && "border-primary")}
       >
         {label}
-        {selected.length > 0 && <span className="text-muted-foreground">({selected.length})</span>}
+        {selected.length > 0 && (
+          <span className="text-muted-foreground">({selected.length})</span>
+        )}
         <ChevronDown className="h-3 w-3" aria-hidden />
       </Button>
       {open && (
@@ -82,13 +89,19 @@ function MultiSelectFilter({
           aria-label={`${label} filter`}
           className="absolute z-20 mt-1 max-h-64 min-w-44 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-md"
         >
-          {choices.length === 0 && <p className="text-muted-foreground px-2 py-1 text-xs">No values yet.</p>}
+          {choices.length === 0 && (
+            <p className="text-muted-foreground px-2 py-1 text-xs">No values yet.</p>
+          )}
           {choices.map((choice) => (
             <label
               key={choice.value}
               className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-accent"
             >
-              <input type="checkbox" checked={isSelected(choice.value)} onChange={() => toggle(choice.value)} />
+              <input
+                type="checkbox"
+                checked={isSelected(choice.value)}
+                onChange={() => toggle(choice.value)}
+              />
               {choice.label}
             </label>
           ))}
@@ -98,9 +111,15 @@ function MultiSelectFilter({
   );
 }
 
-const withNone = (choices: Choice[]): Choice[] => [...choices, { value: NONE, label: "None" }];
-const levelChoices = withNone(WORK_ITEM_LEVELS.map((l) => ({ value: l, label: LEVEL_LABELS[l] })));
-const nameChoices = (names: string[]) => withNone(names.map((n) => ({ value: n, label: n })));
+const withNone = (choices: Choice[]): Choice[] => [
+  ...choices,
+  { value: NONE, label: "None" },
+];
+const levelChoices = withNone(
+  WORK_ITEM_LEVELS.map((l) => ({ value: l, label: LEVEL_LABELS[l] })),
+);
+const nameChoices = (names: string[]) =>
+  withNone(names.map((n) => ({ value: n, label: n })));
 
 // FR-007/FR-008 of 009-work-item-views: the filter bar shared by the List and
 // the Table. It only reports a new query; the caller writes it to the address.
@@ -120,79 +139,199 @@ export function ViewFilters({
   const set = (patch: Partial<ViewQuery>) => onChange({ ...query, ...patch });
   // The search box keeps its own text so typing isn't reset by URL round trips.
   const [search, setSearch] = useState(query.q);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [prevQ, setPrevQ] = useState(query.q);
   if (query.q !== prevQ) {
     setPrevQ(query.q);
     setSearch(query.q);
   }
 
+  const advancedCount =
+    query.stages.length +
+    query.severities.length +
+    query.areas.length +
+    query.iterations.length +
+    query.tags.length;
+  const activeFilters: { key: string; label: string; remove: () => void }[] = [];
+  if (query.q)
+    activeFilters.push({
+      key: "search",
+      label: `Search: ${query.q}`,
+      remove: () => set({ q: "" }),
+    });
+  if (query.status)
+    activeFilters.push({
+      key: "status",
+      label: `Status: ${query.status}`,
+      remove: () => set({ status: null }),
+    });
+  for (const value of query.priorities)
+    activeFilters.push({
+      key: `priority-${value}`,
+      label: `Priority: ${value === NONE ? "None" : LEVEL_LABELS[value]}`,
+      remove: () => set({ priorities: query.priorities.filter((v) => v !== value) }),
+    });
+  for (const value of query.stages)
+    activeFilters.push({
+      key: `stage-${value}`,
+      label: `Column: ${options.stages.find((stage) => stage.publicId === value)?.name ?? value}`,
+      remove: () => set({ stages: query.stages.filter((v) => v !== value) }),
+    });
+  for (const value of query.severities)
+    activeFilters.push({
+      key: `severity-${value}`,
+      label: `Severity: ${value === NONE ? "None" : LEVEL_LABELS[value]}`,
+      remove: () => set({ severities: query.severities.filter((v) => v !== value) }),
+    });
+  for (const [key, label, values] of [
+    ["areas", "Area", query.areas],
+    ["iterations", "Iteration", query.iterations],
+    ["tags", "Tag", query.tags],
+  ] as const) {
+    for (const value of values)
+      activeFilters.push({
+        key: `${key}-${value}`,
+        label: `${label}: ${value === NONE ? "None" : value}`,
+        remove: () => set({ [key]: values.filter((v) => v !== value) }),
+      });
+  }
+  if (query.overdue)
+    activeFilters.push({
+      key: "overdue",
+      label: "Overdue only",
+      remove: () => set({ overdue: false }),
+    });
+
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2" data-testid="view-filters">
-      <div className="relative">
-        <Search className="text-muted-foreground absolute top-2.5 left-2 h-3.5 w-3.5" aria-hidden />
-        <Input
-          aria-label="Search Work Items"
-          placeholder="Search title or ID..."
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            set({ q: e.target.value.trim() });
-          }}
-          className="h-8 w-48 pl-7 text-sm"
+    <div
+      className="flex flex-col gap-2 border-b border-border px-4 py-2"
+      data-testid="view-filters"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <Search
+            className="text-muted-foreground absolute top-2.5 left-2 h-3.5 w-3.5"
+            aria-hidden
+          />
+          <Input
+            aria-label="Search Work Items"
+            placeholder="Search title or ID..."
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              set({ q: e.target.value.trim() });
+            }}
+            className="h-8 w-48 pl-7 text-sm"
+          />
+        </div>
+        <select
+          aria-label="Status"
+          value={query.status ?? ""}
+          onChange={(e) =>
+            set({ status: (e.target.value || null) as ViewQuery["status"] })
+          }
+          className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+        >
+          <option value="">All statuses</option>
+          <option value="open">Open</option>
+          <option value="closed">Closed</option>
+        </select>
+        <MultiSelectFilter
+          label="Priority"
+          choices={levelChoices}
+          selected={query.priorities}
+          onChange={(v) => set({ priorities: v as ViewQuery["priorities"] })}
         />
-      </div>
-      <select
-        aria-label="Status"
-        value={query.status ?? ""}
-        onChange={(e) => set({ status: (e.target.value || null) as ViewQuery["status"] })}
-        className="h-8 rounded-md border border-input bg-background px-2 text-sm"
-      >
-        <option value="">All statuses</option>
-        <option value="open">Open</option>
-        <option value="closed">Closed</option>
-      </select>
-      <MultiSelectFilter
-        label="Column"
-        choices={options.stages.map((s) => ({ value: s.publicId, label: s.name }))}
-        selected={query.stages}
-        onChange={(stages) => set({ stages })}
-      />
-      <MultiSelectFilter
-        label="Priority"
-        choices={levelChoices}
-        selected={query.priorities}
-        onChange={(v) => set({ priorities: v as ViewQuery["priorities"] })}
-      />
-      <MultiSelectFilter
-        label="Severity"
-        choices={levelChoices}
-        selected={query.severities}
-        onChange={(v) => set({ severities: v as ViewQuery["severities"] })}
-      />
-      <MultiSelectFilter label="Area" choices={nameChoices(options.areas)} selected={query.areas} onChange={(areas) => set({ areas })} />
-      <MultiSelectFilter
-        label="Iteration"
-        choices={nameChoices(options.iterations)}
-        selected={query.iterations}
-        onChange={(iterations) => set({ iterations })}
-      />
-      <MultiSelectFilter label="Tag" choices={nameChoices(options.tags)} selected={query.tags} onChange={(tags) => set({ tags })} />
-      <label className="flex items-center gap-1.5 text-sm">
-        <input type="checkbox" checked={query.overdue} onChange={(e) => set({ overdue: e.target.checked })} />
-        Overdue only
-      </label>
-      <span className="text-muted-foreground ml-auto text-xs" data-testid="view-count">
-        {shownCount} of {totalCount}
-      </span>
-      {hasActiveFilters(query) && (
+        <label className="flex items-center gap-1.5 text-sm">
+          <input
+            type="checkbox"
+            checked={query.overdue}
+            onChange={(e) => set({ overdue: e.target.checked })}
+          />
+          Overdue only
+        </label>
         <Button
           type="button"
-          variant="ghost"
+          variant="outline"
           size="sm"
-          onClick={() => onChange({ ...DEFAULT_VIEW_QUERY, sort: query.sort, dir: query.dir })}
+          onClick={() => setMoreOpen((open) => !open)}
+          aria-expanded={moreOpen}
+          aria-controls={moreOpen ? "advanced-view-filters" : undefined}
         >
-          Clear filters
+          More filters{advancedCount > 0 ? ` (${advancedCount})` : ""}
+          <ChevronDown
+            className={cn("h-3 w-3 transition-transform", moreOpen && "rotate-180")}
+            aria-hidden
+          />
         </Button>
+        <span className="text-muted-foreground ml-auto text-xs" data-testid="view-count">
+          {shownCount} of {totalCount}
+        </span>
+        {hasActiveFilters(query) && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() =>
+              onChange({ ...DEFAULT_VIEW_QUERY, sort: query.sort, dir: query.dir })
+            }
+          >
+            Clear filters
+          </Button>
+        )}
+      </div>
+      {moreOpen && (
+        <div
+          id="advanced-view-filters"
+          className="flex flex-wrap items-center gap-2 border-t border-border pt-2"
+        >
+          <MultiSelectFilter
+            label="Column"
+            choices={options.stages.map((s) => ({ value: s.publicId, label: s.name }))}
+            selected={query.stages}
+            onChange={(stages) => set({ stages })}
+          />
+          <MultiSelectFilter
+            label="Severity"
+            choices={levelChoices}
+            selected={query.severities}
+            onChange={(v) => set({ severities: v as ViewQuery["severities"] })}
+          />
+          <MultiSelectFilter
+            label="Area"
+            choices={nameChoices(options.areas)}
+            selected={query.areas}
+            onChange={(areas) => set({ areas })}
+          />
+          <MultiSelectFilter
+            label="Iteration"
+            choices={nameChoices(options.iterations)}
+            selected={query.iterations}
+            onChange={(iterations) => set({ iterations })}
+          />
+          <MultiSelectFilter
+            label="Tag"
+            choices={nameChoices(options.tags)}
+            selected={query.tags}
+            onChange={(tags) => set({ tags })}
+          />
+        </div>
+      )}
+      {activeFilters.length > 0 && (
+        <div className="flex flex-wrap gap-1" aria-label="Active filters">
+          {activeFilters.map((filter) => (
+            <button
+              key={filter.key}
+              type="button"
+              onClick={filter.remove}
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary px-2 py-0.5 text-xs hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              aria-label={`Remove ${filter.label} filter`}
+            >
+              {filter.label}
+              <span aria-hidden>×</span>
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );

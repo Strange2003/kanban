@@ -32,7 +32,7 @@ export default async function ProjectSettingsPage({
   const pendingInvitations = pendingInvitationsResult?.ok ? pendingInvitationsResult.data : [];
 
   return (
-    <main className="mx-auto max-w-2xl space-y-8 overflow-y-auto p-8">
+    <main className="mx-auto min-w-0 max-w-2xl flex-1 space-y-8 overflow-y-auto p-4 sm:p-8">
       <div>
         <Link href={`/projects/${projectPublicId}`} className="text-muted-foreground text-sm underline underline-offset-4">
           ← Back to board

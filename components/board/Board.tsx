@@ -2,10 +2,26 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
-import { SortableContext, arrayMove, horizontalListSortingStrategy } from "@dnd-kit/sortable";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  horizontalListSortingStrategy,
+  sortableKeyboardCoordinates,
+} from "@dnd-kit/sortable";
 import { reorderStages, setStageClosing, type StageWithCount } from "@/lib/actions/board";
-import { moveWorkItem, reorderWorkItemsInStage, type WorkItemWithDisplayId } from "@/lib/actions/work-items";
+import {
+  moveWorkItem,
+  reorderWorkItemsInStage,
+  type WorkItemWithDisplayId,
+} from "@/lib/actions/work-items";
 import { StageColumn } from "@/components/board/StageColumn";
 import { isRolePermissionError } from "@/lib/errors";
 import { can, type ProjectRole } from "@/lib/roles";
@@ -50,7 +66,10 @@ export function Board({
   // A small activation distance lets a plain click (opening a Work Item's
   // detail panel, or a column's delete button) fire normally, while a real
   // drag still activates past the threshold.
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   // FR-005/FR-011 of 003-kanban-board, same optimistic + revert-on-failure
   // pattern as moving a Work Item below (Principle I of the constitution).
@@ -96,7 +115,11 @@ export function Board({
     });
 
     setWorkItemsState((items) =>
-      items.map((wi) => (wi.id === workItemId ? { ...wi, stageId: toStageId, position: toPosition, closedAt } : wi)),
+      items.map((wi) =>
+        wi.id === workItemId
+          ? { ...wi, stageId: toStageId, position: toPosition, closedAt }
+          : wi,
+      ),
     );
 
     const result = await moveWorkItem({ workItemId, toStageId, toPosition });
@@ -116,12 +139,20 @@ export function Board({
     const previousItems = workItemsState;
     const now = new Date();
 
-    setStagesState((all) => all.map((s) => (s.id === stage.id ? { ...s, isClosing } : s)));
+    setStagesState((all) =>
+      all.map((s) => (s.id === stage.id ? { ...s, isClosing } : s)),
+    );
     setWorkItemsState((items) =>
-      items.map((wi) => (wi.stageId === stage.id ? { ...wi, closedAt: isClosing ? now : null } : wi)),
+      items.map((wi) =>
+        wi.stageId === stage.id ? { ...wi, closedAt: isClosing ? now : null } : wi,
+      ),
     );
 
-    const result = await setStageClosing({ projectPublicId, stagePublicId: stage.publicId, isClosing });
+    const result = await setStageClosing({
+      projectPublicId,
+      stagePublicId: stage.publicId,
+      isClosing,
+    });
     if (!result.ok) {
       setStagesState(previousStages);
       setWorkItemsState(previousItems);
@@ -134,10 +165,16 @@ export function Board({
   }
 
   // FR-006 of 004-work-items, same optimistic + revert-on-failure pattern.
-  async function handleWorkItemReorder(workItemId: number, overWorkItemId: number, stageId: number) {
+  async function handleWorkItemReorder(
+    workItemId: number,
+    overWorkItemId: number,
+    stageId: number,
+  ) {
     if (workItemId === overWorkItemId) return;
 
-    const stageItems = workItemsState.filter((wi) => wi.stageId === stageId).sort((a, b) => a.position - b.position);
+    const stageItems = workItemsState
+      .filter((wi) => wi.stageId === stageId)
+      .sort((a, b) => a.position - b.position);
     const fromIndex = stageItems.findIndex((wi) => wi.id === workItemId);
     const toIndex = stageItems.findIndex((wi) => wi.id === overWorkItemId);
     if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return;
@@ -151,12 +188,24 @@ export function Board({
       ),
     );
 
-    const result = await reorderWorkItemsInStage({ stageId, orderedWorkItemIds: reorderedIds });
+    const result = await reorderWorkItemsInStage({
+      stageId,
+      orderedWorkItemIds: reorderedIds,
+    });
     if (!result.ok) {
       setWorkItemsState(previous);
       toast(result.error.message, "destructive");
       if (isRolePermissionError(result)) router.refresh();
     }
+  }
+
+  function reorderWorkItemByStep(workItemId: number, stageId: number, direction: -1 | 1) {
+    const siblings = workItemsState
+      .filter((wi) => wi.stageId === stageId)
+      .sort((a, b) => a.position - b.position);
+    const index = siblings.findIndex((wi) => wi.id === workItemId);
+    const target = siblings[index + direction];
+    if (target) void handleWorkItemReorder(workItemId, target.id, stageId);
   }
 
   function handleDragEnd(event: DragEndEvent) {
@@ -188,18 +237,47 @@ export function Board({
     void handleWorkItemMove(workItemId, toStageId);
   }
 
+  if (stagesState.length === 0) {
+    return (
+      <div className="flex min-w-0 flex-1 items-center justify-center p-6 text-center">
+        <div className="flex max-w-sm flex-col items-center gap-3">
+          <h2 className="text-lg font-semibold">Build your board</h2>
+          <p className="text-sm text-muted-foreground">
+            {canEdit
+              ? "Start with a column for the first step in your workflow."
+              : "An editor can add the first column to this board."}
+          </p>
+          {canEdit && <AddStageButton projectPublicId={projectPublicId} />}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <DndContext id="board-dnd" sensors={sensors} onDragEnd={handleDragEnd}>
-      <div className="flex flex-1 flex-col">
-        <div className="flex flex-1 gap-4 overflow-x-auto p-4">
-          <SortableContext items={stagesState.map((s) => `stage:${s.id}`)} strategy={horizontalListSortingStrategy}>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {stagesState.length > 1 && (
+          <p className="px-4 pt-2 text-xs text-muted-foreground md:hidden">
+            Swipe sideways to see all {stagesState.length} columns.
+          </p>
+        )}
+        <div className="flex min-h-0 min-w-0 flex-1 snap-x snap-mandatory scroll-px-4 gap-4 overflow-auto p-4 md:snap-none">
+          <SortableContext
+            items={stagesState.map((s) => `stage:${s.id}`)}
+            strategy={horizontalListSortingStrategy}
+          >
             {stagesState.map((stage) => (
               <StageColumn
                 key={stage.id}
                 projectPublicId={projectPublicId}
                 canEdit={canEdit}
                 stage={stage}
+                stages={stagesState.map((s) => ({ id: s.id, name: s.name }))}
                 onToggleClosing={handleToggleClosing}
+                onMoveWorkItem={(workItemId, stageId) =>
+                  void handleWorkItemMove(workItemId, stageId)
+                }
+                onReorderWorkItem={reorderWorkItemByStep}
                 workItems={workItemsState
                   .filter((wi) => wi.stageId === stage.id)
                   .sort((a, b) => a.position - b.position)}

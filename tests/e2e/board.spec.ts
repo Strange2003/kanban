@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { signUpNewUser, createProjectViaUi, addColumn, clickUntilVisible, pointerDrag } from "./helpers";
+import { signUpNewUser, createProjectViaUi, addColumn, addWorkItem, clickUntilVisible, pointerDrag } from "./helpers";
 
 // quickstart.md bloque 3.
 
@@ -90,5 +90,37 @@ test.describe("Kanban board", () => {
 
     await page.reload();
     await expect(page.getByRole("heading", { name: "New column name", level: 3 })).toBeVisible();
+  });
+
+  test("offers visible controls to rename and move without dragging", async ({ page }) => {
+    await signUpNewUser(page);
+    await createProjectViaUi(page, "Accessible board");
+    await addColumn(page, "To do");
+    await addColumn(page, "Doing");
+    await addWorkItem(page, "Review the layout");
+
+    await page.getByRole("button", { name: "Rename column To do" }).click();
+    await page.getByRole("textbox", { name: "Column name for To do" }).fill("Ready");
+    await page.getByRole("textbox", { name: "Column name for To do" }).press("Enter");
+    await expect(page.getByRole("heading", { name: "Ready", level: 3 })).toBeVisible();
+
+    const card = page.locator('[data-testid="work-item-card"]', { hasText: "Review the layout" });
+    await card.getByRole("combobox", { name: /Move .* to column/ }).selectOption({ label: "Doing" });
+    await expect(page.locator('[data-testid="stage-column"]', { hasText: "Doing" }).getByTestId("work-item-card")).toContainText("Review the layout");
+  });
+
+  test("keeps the board usable with the mobile project drawer", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await signUpNewUser(page);
+    await createProjectViaUi(page, "Mobile board");
+    await addColumn(page, "To do");
+
+    await expect(page.getByRole("heading", { name: "Mobile board", level: 1 })).toBeVisible();
+    await page.getByRole("button", { name: "Open projects" }).click();
+    const drawer = page.getByRole("dialog", { name: "Projects" });
+    await expect(drawer.getByRole("link", { name: "Mobile board" })).toBeVisible();
+    await drawer.getByRole("button", { name: "Close projects" }).click();
+    await expect(drawer).toBeHidden();
+    await expect(page.getByRole("heading", { name: "To do", level: 3 })).toBeVisible();
   });
 });

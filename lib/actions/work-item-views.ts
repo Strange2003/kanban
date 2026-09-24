@@ -13,6 +13,7 @@ export type WorkItemsViewData = {
   rows: WorkItemViewRow[];
   options: WorkItemViewOptions;
   role: ProjectRole;
+  projectName: string;
   totalCount: number;
 };
 
@@ -101,6 +102,7 @@ export async function getWorkItemsView(projectPublicId: string): Promise<Result<
         tags: catalogTags.map((t) => t.name),
       },
       role: membership.role,
+      projectName: project.name,
       totalCount: rows.length,
     };
   });

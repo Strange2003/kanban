@@ -18,10 +18,10 @@ export default async function ProjectBoardPage({
   }
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
       {/* 009-work-item-views: the Board / List / Table switcher, shared by the three views. */}
       <Suspense>
-        <ProjectViewHeader projectPublicId={projectPublicId} role={result.data.role} active="board" />
+        <ProjectViewHeader projectPublicId={projectPublicId} projectName={result.data.projectName} role={result.data.role} active="board" />
       </Suspense>
       <Board
         projectPublicId={projectPublicId}

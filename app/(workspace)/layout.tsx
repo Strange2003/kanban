@@ -3,6 +3,7 @@ import { requireSession } from "@/lib/auth";
 import { ProjectSidebar } from "@/components/sidebar/ProjectSidebar";
 import { ProjectSidebarSkeleton } from "@/components/sidebar/ProjectSidebarSkeleton";
 import { NotificationsPanel } from "@/components/sidebar/NotificationsPanel";
+import { WorkspaceShell } from "@/components/sidebar/WorkspaceShell";
 
 // Protected shell for everything behind login. ProjectSidebar and
 // NotificationsPanel are each Suspense-wrapped (Principle I of the
@@ -16,18 +17,21 @@ export default async function WorkspaceLayout({
   await requireSession();
 
   return (
-    <div className="flex h-dvh flex-col">
-      <header className="flex h-12 shrink-0 items-center justify-end border-b border-border px-4">
-        <Suspense fallback={<div className="h-9 w-9 animate-pulse rounded-md bg-muted" />}>
+    <WorkspaceShell
+      notifications={
+        <Suspense
+          fallback={<div className="h-9 w-9 animate-pulse rounded-md bg-muted" />}
+        >
           <NotificationsPanel />
         </Suspense>
-      </header>
-      <div className="flex flex-1 overflow-hidden">
+      }
+      sidebar={
         <Suspense fallback={<ProjectSidebarSkeleton />}>
           <ProjectSidebar />
         </Suspense>
-        {children}
-      </div>
-    </div>
+      }
+    >
+      {children}
+    </WorkspaceShell>
   );
 }

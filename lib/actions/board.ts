@@ -18,7 +18,7 @@ export type StageWithCount = typeof stages.$inferSelect & { workItemCount: numbe
 // for a Viewer; reading the board itself only needs membership.
 export async function getBoard(
   projectPublicId: string,
-): Promise<Result<{ stages: StageWithCount[]; workItems: WorkItemWithDisplayId[]; role: ProjectRole }>> {
+): Promise<Result<{ stages: StageWithCount[]; workItems: WorkItemWithDisplayId[]; role: ProjectRole; projectName: string }>> {
   return runAction(async () => {
     const { project, membership } = await requireProjectMember(projectPublicId);
 
@@ -46,6 +46,7 @@ export async function getBoard(
         displayId: `${project.workItemPrefix}-${wi.displayNumber}`,
       })),
       role: membership.role,
+      projectName: project.name,
     };
   });
 }

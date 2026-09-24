@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { updateWorkItem, deleteWorkItem, closeWorkItem, type WorkItemWithDisplayId } from "@/lib/actions/work-items";
@@ -21,6 +21,7 @@ import { isRolePermissionError } from "@/lib/errors";
 import { can } from "@/lib/roles";
 import { CatalogPicker } from "@/components/work-items/CatalogPicker";
 import { LocalDate } from "@/components/ui/local-date";
+import { useToast } from "@/components/ui/toast";
 import { formatCalendarDate, useLocalToday } from "@/lib/dates";
 import { LEVEL_LABELS, WORK_ITEM_LEVELS, isOverdue, type WorkItemLevel } from "@/lib/work-item-fields";
 
@@ -99,6 +100,7 @@ export function WorkItemDetailView({
   initialDetail: WorkItemDetailData;
 }) {
   const router = useRouter();
+  const { toast } = useToast();
   // 007-roles-permissions: derived from the role the server just read, so a
   // router.refresh() after a rejected action flips this screen to read-only.
   // The Server Actions enforce the same permissions; this only reflects them.
@@ -117,6 +119,18 @@ export function WorkItemDetailView({
   const [closing, setClosing] = useState(false);
   const today = useLocalToday();
   const [selectedTags, setSelectedTags] = useState(initialDetail.itemTags);
+  const [savedFields, setSavedFields] = useState(() => ({
+    title: workItem.title,
+    description: workItem.description ?? "",
+    stakeholder: workItem.stakeholder ?? "",
+    tags: initialDetail.itemTags,
+    priority: workItem.priority,
+    severity: workItem.severity,
+    area: initialDetail.itemArea,
+    iteration: initialDetail.itemIteration,
+    startDate: workItem.startDate ?? "",
+    targetDate: workItem.targetDate ?? "",
+  }));
   const [catalogTags, setCatalogTags] = useState(initialDetail.catalogTags);
   const [activity, setActivity] = useState<ActivityEntry[]>(initialDetail.activity);
   const [relations, setRelations] = useState(initialDetail.relations);
@@ -128,6 +142,75 @@ export function WorkItemDetailView({
   const [submitting, setSubmitting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const restoringHistory = useRef(false);
+  const currentFields = {
+    title,
+    description,
+    stakeholder,
+    tags: selectedTags,
+    priority,
+    severity,
+    area,
+    iteration,
+    startDate,
+    targetDate,
+  };
+  const hasUnsavedChanges =
+    canEdit && JSON.stringify(currentFields) !== JSON.stringify(savedFields);
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const message = "You have unsaved changes. Leave this Work Item?";
+    function onBeforeUnload(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = "";
+    }
+    function onLinkClick(event: MouseEvent) {
+      if (
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      )
+        return;
+      const target = event.target;
+      const anchor =
+        target instanceof Element ? target.closest<HTMLAnchorElement>("a[href]") : null;
+      if (!anchor || anchor.target === "_blank" || anchor.hasAttribute("download"))
+        return;
+      const destination = new URL(anchor.href, window.location.href);
+      if (destination.origin !== window.location.origin) return;
+      if (
+        destination.pathname === window.location.pathname &&
+        destination.search === window.location.search
+      )
+        return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (window.confirm(message))
+        router.push(destination.pathname + destination.search + destination.hash);
+    }
+    function onPopState() {
+      if (restoringHistory.current) {
+        restoringHistory.current = false;
+        return;
+      }
+      if (!window.confirm(message)) {
+        restoringHistory.current = true;
+        window.history.forward();
+      }
+    }
+    window.addEventListener("beforeunload", onBeforeUnload);
+    document.addEventListener("click", onLinkClick, true);
+    window.addEventListener("popstate", onPopState);
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      document.removeEventListener("click", onLinkClick, true);
+      window.removeEventListener("popstate", onPopState);
+    };
+  }, [hasUnsavedChanges, router]);
+
 
   // After a router.refresh() (Save, Close, …) the server sends fresh detail
   // data: pick up the new activity entries right away (FR-020 of
@@ -158,6 +241,18 @@ export function WorkItemDetailView({
     setStartDate(workItem.startDate ?? "");
     setTargetDate(workItem.targetDate ?? "");
     setSelectedTags(initialDetail.itemTags);
+    setSavedFields({
+      title: workItem.title,
+      description: workItem.description ?? "",
+      stakeholder: workItem.stakeholder ?? "",
+      tags: initialDetail.itemTags,
+      priority: workItem.priority,
+      severity: workItem.severity,
+      area: initialDetail.itemArea,
+      iteration: initialDetail.itemIteration,
+      startDate: workItem.startDate ?? "",
+      targetDate: workItem.targetDate ?? "",
+    });
     setCatalogTags(initialDetail.catalogTags);
     setActivity(initialDetail.activity);
     setRelations(initialDetail.relations);
@@ -232,6 +327,7 @@ export function WorkItemDetailView({
     e.preventDefault();
     // Pressing Enter in a read-only field still submits the form; a Viewer has nothing to save.
     if (!canEdit) return;
+    const submittedFields = currentFields;
     setError(null);
     setSubmitting(true);
     const result = await updateWorkItem({
@@ -254,6 +350,8 @@ export function WorkItemDetailView({
       if (isRolePermissionError(result)) router.refresh();
       return;
     }
+    setSavedFields(submittedFields);
+    toast("Work Item saved.");
     router.refresh();
   }
 
@@ -289,7 +387,8 @@ export function WorkItemDetailView({
   const hasNoRelations = !parent && children.length === 0 && related.length === 0;
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-4 p-6">
+    <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+      <div className="mx-auto w-full max-w-2xl space-y-4 p-4 pb-0 sm:p-6 sm:pb-0">
       <Link
         href={`/projects/${projectPublicId}`}
         className="text-muted-foreground rounded text-sm hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
@@ -297,7 +396,11 @@ export function WorkItemDetailView({
         ← Back to board
       </Link>
 
-      <h1 className="text-lg font-semibold">{workItem.displayId}</h1>
+      <div className="flex flex-wrap items-center gap-2">
+        <h1 className="text-lg font-semibold">{workItem.displayId}</h1>
+        <span className="rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground">{initialDetail.stage.name}</span>
+        {hasUnsavedChanges && <span className="text-xs font-medium text-amber-500" role="status">Unsaved changes</span>}
+      </div>
 
       {!canEdit && <ReadOnlyNotice role={initialDetail.role} />}
 
@@ -333,7 +436,7 @@ export function WorkItemDetailView({
 
         <fieldset className="space-y-3 rounded-md border border-border p-3" data-testid="planning-section">
           <legend className="px-1 text-sm font-medium">Planning</legend>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="wi-priority">Priority</Label>
               <select
@@ -507,7 +610,7 @@ export function WorkItemDetailView({
           )}
 
           {canEditRelations && !parent && pickableWorkItems.length > 0 && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
               <select
                 aria-label="Convert into a child of"
                 value={parentPick}
@@ -528,7 +631,7 @@ export function WorkItemDetailView({
           )}
 
           {canEditRelations && pickableWorkItems.length > 0 && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
               <select
                 aria-label="Relate to"
                 value={relatedPick}
@@ -607,7 +710,7 @@ export function WorkItemDetailView({
         {error && <p className="text-destructive text-sm">{error}</p>}
 
         {canEdit && (
-          <div className="flex items-center justify-between border-t border-border pt-4">
+          <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center justify-between gap-2 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
             {confirmingDelete ? (
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground text-xs">Delete this Work Item?</span>
@@ -623,12 +726,16 @@ export function WorkItemDetailView({
                 Delete
               </Button>
             )}
-            <Button type="submit" disabled={submitting}>
-              {submitting ? "Saving..." : "Save"}
-            </Button>
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-xs text-muted-foreground" role="status">{hasUnsavedChanges ? "Not saved yet" : "All changes saved"}</span>
+              <Button type="submit" disabled={submitting}>
+                {submitting ? "Saving..." : "Save"}
+              </Button>
+            </div>
           </div>
         )}
       </form>
-    </div>
+      </div>
+    </main>
   );
 }

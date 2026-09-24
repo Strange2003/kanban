@@ -78,8 +78,9 @@ export function WorkItemsTable({
         shownCount={visible.length}
         totalCount={rows.length}
       />
-      <div className="flex-1 overflow-auto">
-        <table className="w-full border-collapse text-sm" data-testid="work-items-table">
+      <p className="px-4 pt-2 text-xs text-muted-foreground md:hidden">Scroll sideways to see every field.</p>
+      <div className="min-h-0 flex-1 overflow-auto">
+        <table className="min-w-max w-full border-collapse text-sm" data-testid="work-items-table">
           <thead className="bg-card sticky top-0 z-10">
             <tr className="border-b border-border">
               {COLUMNS.map((col) => {
@@ -89,7 +90,7 @@ export function WorkItemsTable({
                     key={col.label}
                     scope="col"
                     aria-sort={active ? (query.dir === "asc" ? "ascending" : "descending") : undefined}
-                    className={cn("px-3 py-2 text-left font-medium whitespace-nowrap", col.className)}
+                    className={cn("px-3 py-2 text-left font-medium whitespace-nowrap", col.className, col.sort === "id" && "sticky left-0 z-20 bg-card")}
                   >
                     {col.sort ? (
                       <button
@@ -141,7 +142,7 @@ export function WorkItemsTable({
                   className={cn("border-b border-border hover:bg-accent/40", row.isClosed && "text-muted-foreground")}
                   data-testid="table-row"
                 >
-                  <td className="px-3 py-2 whitespace-nowrap">{row.displayId}</td>
+                  <td className="sticky left-0 z-10 bg-background px-3 py-2 whitespace-nowrap">{row.displayId}</td>
                   <td className="px-3 py-2">
                     <Link
                       href={`/projects/${projectPublicId}/work-items/${row.displayNumber}`}

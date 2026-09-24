@@ -38,7 +38,7 @@ export function Dialog({
         className,
       )}
     >
-      <div className="w-80 p-6 sm:w-96">{children}</div>
+      <div className="w-[min(calc(100vw-2rem),24rem)] p-5 sm:p-6">{children}</div>
     </dialog>
   );
 }

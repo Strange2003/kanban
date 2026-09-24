@@ -2,8 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { GripVertical, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { renameStage, type StageWithCount } from "@/lib/actions/board";
 import type { WorkItemWithDisplayId } from "@/lib/actions/work-items";
@@ -13,6 +18,7 @@ import { DeleteStageButton } from "@/components/board/DeleteStageButton";
 import { ClosingStageToggle } from "@/components/board/ClosingStageToggle";
 import { Input } from "@/components/ui/input";
 import { isRolePermissionError } from "@/lib/errors";
+import { useToast } from "@/components/ui/toast";
 
 // FR-008 of 003-kanban-board: double-click the column name to rename it in place.
 function StageName({
@@ -25,6 +31,7 @@ function StageName({
   canEdit: boolean;
 }) {
   const router = useRouter();
+  const { toast } = useToast();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(stage.name);
   const [submitting, setSubmitting] = useState(false);
@@ -38,10 +45,15 @@ function StageName({
       return;
     }
     setSubmitting(true);
-    const result = await renameStage({ projectPublicId, stageId: stage.publicId, name: trimmed });
+    const result = await renameStage({
+      projectPublicId,
+      stageId: stage.publicId,
+      name: trimmed,
+    });
     setSubmitting(false);
     if (!result.ok) {
       setName(stage.name);
+      toast(result.error.message, "destructive");
       // Role changed under an open board (FR-004 of 007-roles-permissions).
       if (isRolePermissionError(result)) router.refresh();
     }
@@ -53,6 +65,7 @@ function StageName({
       <form onSubmit={handleSubmit}>
         <Input
           autoFocus
+          aria-label={`Column name for ${stage.name}`}
           value={name}
           onChange={(e) => setName(e.target.value)}
           onBlur={handleSubmit}
@@ -70,16 +83,30 @@ function StageName({
   }
 
   return (
-    <h3
-      className="text-sm font-medium"
-      onDoubleClick={(e) => {
-        if (!canEdit) return; // a Viewer can't rename columns (FR-005 of 007)
-        e.stopPropagation();
-        setEditing(true);
-      }}
-    >
-      {stage.name}
-    </h3>
+    <div className="flex min-w-0 items-center gap-1">
+      <h3
+        className="truncate text-sm font-medium"
+        title={stage.name}
+        onDoubleClick={(e) => {
+          if (!canEdit) return;
+          e.stopPropagation();
+          setEditing(true);
+        }}
+      >
+        {stage.name}
+      </h3>
+      {canEdit && (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          aria-label={`Rename column ${stage.name}`}
+          title="Rename column"
+        >
+          <Pencil className="h-3 w-3" aria-hidden />
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -87,24 +114,39 @@ export function StageColumn({
   projectPublicId,
   canEdit,
   stage,
+  stages,
   workItems,
   onToggleClosing,
+  onMoveWorkItem,
+  onReorderWorkItem,
 }: {
   projectPublicId: string;
   // False for a Viewer (007-roles-permissions): no dragging, renaming,
   // deleting the column or adding Work Items — they can still open cards.
   canEdit: boolean;
   stage: StageWithCount;
+  stages: { id: number; name: string }[];
   workItems: WorkItemWithDisplayId[];
   // 008-work-item-fields (FR-011): Board owns the optimistic update.
   onToggleClosing: (stage: StageWithCount) => void;
+  onMoveWorkItem: (workItemId: number, stageId: number) => void;
+  onReorderWorkItem: (workItemId: number, stageId: number, direction: -1 | 1) => void;
 }) {
   // One sortable registration per stage serves double duty: it's both the
   // reorder-columns drag source/target (FR-005 of 003) and the drop target
   // for a Work Item dragged in from another column (FR-005 of 004) — two
   // separate droppable registrations on the same rect would leave dnd-kit's
   // collision detection to guess which one `over` resolves to.
-  const { attributes, listeners, setNodeRef, transform, transition, isOver, isDragging } = useSortable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isOver,
+    isDragging,
+  } = useSortable({
     id: `stage:${stage.id}`,
     data: { type: "stage", stageId: stage.id },
     disabled: !canEdit,
@@ -115,20 +157,17 @@ export function StageColumn({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
-        "flex w-72 shrink-0 flex-col rounded-lg border border-border bg-card transition-colors",
+        "flex w-72 shrink-0 snap-start flex-col rounded-lg border border-border bg-card transition-colors",
         isOver && "border-primary/50 bg-accent/40",
         isDragging && "opacity-50",
       )}
       data-testid="stage-column"
     >
       <div
-        {...(canEdit ? attributes : {})}
-        {...(canEdit ? listeners : {})}
-        aria-label={canEdit ? `Drag to reorder column: ${stage.name}` : undefined}
+        onPointerDown={canEdit ? (event) => listeners?.onPointerDown?.(event) : undefined}
         className={cn(
-          "flex items-center justify-between rounded-t-lg px-3 py-2 outline-none",
-          canEdit &&
-            "cursor-grab active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+          "flex items-center justify-between rounded-t-lg px-3 py-2",
+          canEdit && "cursor-grab active:cursor-grabbing",
         )}
       >
         <div className="flex min-w-0 items-center gap-1.5">
@@ -146,7 +185,25 @@ export function StageColumn({
         </div>
         <div className="flex items-center gap-1">
           <span className="text-muted-foreground text-xs">{workItems.length}</span>
-          {canEdit && <ClosingStageToggle isClosing={stage.isClosing} onToggle={() => onToggleClosing(stage)} />}
+          {canEdit && (
+            <ClosingStageToggle
+              isClosing={stage.isClosing}
+              onToggle={() => onToggleClosing(stage)}
+            />
+          )}
+          {canEdit && (
+            <button
+              ref={setActivatorNodeRef}
+              type="button"
+              {...attributes}
+              onKeyDown={(event) => listeners?.onKeyDown?.(event)}
+              aria-label={`Reorder column ${stage.name}. Press Space, then use arrow keys.`}
+              className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              title="Drag column or use Space and arrow keys"
+            >
+              <GripVertical className="h-3.5 w-3.5" aria-hidden />
+            </button>
+          )}
           {canEdit && (
             <DeleteStageButton
               projectPublicId={projectPublicId}
@@ -161,12 +218,17 @@ export function StageColumn({
           items={workItems.map((wi) => `work-item:${wi.id}`)}
           strategy={verticalListSortingStrategy}
         >
-          {workItems.map((workItem) => (
+          {workItems.map((workItem, index) => (
             <WorkItemCard
               key={workItem.id}
               workItem={workItem}
               projectPublicId={projectPublicId}
               canEdit={canEdit}
+              stages={stages}
+              onMove={onMoveWorkItem}
+              onReorder={onReorderWorkItem}
+              canMoveUp={index > 0}
+              canMoveDown={index < workItems.length - 1}
             />
           ))}
         </SortableContext>

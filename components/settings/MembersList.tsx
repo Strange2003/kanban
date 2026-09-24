@@ -84,12 +84,12 @@ export function MembersList({
 
       <ul className="divide-y divide-border rounded-md border border-border">
         {optimisticMembers.map((member) => (
-          <li key={member.userId} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+          <li key={member.userId} className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 text-sm">
             <span>
               {member.name}
               {member.userId === currentUserId && <span className="text-muted-foreground"> (you)</span>}
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {canChangeRole && member.role !== "owner" ? (
                 <select
                   aria-label={`Role of ${member.name}`}
