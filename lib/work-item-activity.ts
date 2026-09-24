@@ -28,12 +28,17 @@ const FIELD_LABELS: Record<string, string> = {
   iteration: "Iteration",
   startDate: "Start date",
   targetDate: "Target date",
+  estimateMinutes: "Estimate",
 };
 
 function formatFieldValue(field: string, value: unknown, formatDate: (value: string) => string): string {
   if (value === null || value === undefined || value === "") return "None";
   if (field === "priority" || field === "severity") return LEVEL_LABELS[value as WorkItemLevel] ?? String(value);
   if (field === "startDate" || field === "targetDate") return formatDate(String(value));
+  if (field === "estimateMinutes") {
+    const minutes = Number(value);
+    return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+  }
   return String(value);
 }
 
@@ -74,6 +79,9 @@ export function describeWorkItemActivity(
     return to ? `Assigned to ${to.name}` : "Unassigned";
   }
   if (entry.type === "created") return "Created";
+  if (entry.type === "comment_added") return "Comment added";
+  if (entry.type === "time_entry_added") return "Time logged";
+  if (entry.type === "time_entry_deleted") return "Time entry removed";
   if (entry.type === "parent_linked") return "Linked to a parent Work Item";
   if (entry.type === "parent_unlinked") return "Unlinked from its parent Work Item";
   if (entry.type === "related_linked") return "Linked to a related Work Item";

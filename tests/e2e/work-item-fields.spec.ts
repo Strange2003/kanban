@@ -55,6 +55,7 @@ test.describe("Extended fields — priority and severity (US1)", () => {
     await page.reload();
     await expect(page.getByLabel("Priority")).toHaveValue("high");
     await expect(page.getByLabel("Severity")).toHaveValue("medium");
+    await page.getByRole("tab", { name: "History" }).click();
     await expect(page.getByText("Priority: None → High")).toBeVisible();
     await expect(page.getByText(/Severity: None → Medium/)).toBeVisible();
 
@@ -67,6 +68,7 @@ test.describe("Extended fields — priority and severity (US1)", () => {
     await page.getByLabel("Priority").selectOption("");
     await page.getByLabel("Severity").selectOption("");
     await save(page);
+    await page.getByRole("tab", { name: "History" }).click();
     await expect(page.getByText(/Priority: High → None/)).toBeVisible();
     await backToBoard(page);
     await expect(card(page, "Fix checkout bug").getByTestId("priority-badge")).toHaveCount(0);
@@ -137,6 +139,7 @@ test.describe("Extended fields — closing columns and Close (US3)", () => {
     await openCard(page, "Late task");
     await expect(page.getByTestId("work-item-status")).toContainText("Closed on");
     await expect(page.getByTestId("work-item-status")).toContainText("Done");
+    await page.getByRole("tab", { name: "History" }).click();
     await expect(page.getByText("Closed (moved to Done)")).toBeVisible();
     await expect(page.getByRole("button", { name: "Close", exact: true })).toHaveCount(0);
 
@@ -146,6 +149,7 @@ test.describe("Extended fields — closing columns and Close (US3)", () => {
     await expect(card(page, "Late task").getByTestId("target-date-chip")).toHaveAttribute("data-overdue", "true");
     await openCard(page, "Late task");
     await expect(page.getByTestId("work-item-status")).toHaveText("Open");
+    await page.getByRole("tab", { name: "History" }).click();
     await expect(page.getByText("Reopened (moved to Doing)")).toBeVisible();
 
     // 5. Close from the detail view: ends up in Done, closed.
@@ -153,6 +157,7 @@ test.describe("Extended fields — closing columns and Close (US3)", () => {
     await openCard(page, "Button task");
     await page.getByRole("button", { name: "Close", exact: true }).click();
     await expect(page.getByTestId("work-item-status")).toContainText("Closed on");
+    await page.getByRole("tab", { name: "History" }).click();
     await expect(page.getByText("Closed (moved to Done)")).toBeVisible();
     await backToBoard(page);
     await expect(column(page, "Done")).toContainText("Button task");
@@ -161,11 +166,13 @@ test.describe("Extended fields — closing columns and Close (US3)", () => {
     await setClosing(page, "Doing", true);
     await openCard(page, "Late task");
     await expect(page.getByTestId("work-item-status")).toContainText("Closed on");
+    await page.getByRole("tab", { name: "History" }).click();
     await expect(page.getByText("Closed: column Doing marked as closing")).toBeVisible();
     await backToBoard(page);
     await setClosing(page, "Doing", false);
     await openCard(page, "Late task");
     await expect(page.getByTestId("work-item-status")).toHaveText("Open");
+    await page.getByRole("tab", { name: "History" }).click();
     await expect(page.getByText("Reopened: column Doing unmarked as closing")).toBeVisible();
 
     // 8. A Work Item created directly in Done is born closed.
@@ -177,6 +184,7 @@ test.describe("Extended fields — closing columns and Close (US3)", () => {
     await expect(card(page, "Born closed")).toBeVisible();
     await openCard(page, "Born closed");
     await expect(page.getByTestId("work-item-status")).toContainText("Closed on");
+    await page.getByRole("tab", { name: "History" }).click();
     await expect(page.getByText("Closed (created in Done)")).toBeVisible();
   });
 });
@@ -196,6 +204,7 @@ test.describe("Extended fields — area and iteration (US4)", () => {
     await page.getByLabel("Iteration", { exact: true }).fill("Sprint 1");
     await page.getByRole("button", { name: 'Create "Sprint 1"' }).click();
     await save(page);
+    await page.getByRole("tab", { name: "History" }).click();
     await expect(page.getByText("Area: None → Frontend")).toBeVisible();
 
     // Suggested in another Work Item of the same project; "FRONTEND" reuses it.
@@ -212,11 +221,14 @@ test.describe("Extended fields — area and iteration (US4)", () => {
     await expect(page.getByRole("button", { name: "Sprint 1", exact: true })).toHaveCount(0);
     await page.getByLabel("Area", { exact: true }).fill("");
     await save(page);
+    await page.getByRole("tab", { name: "History" }).click();
     await expect(page.getByText("Area: None → Frontend")).toBeVisible();
 
     // Removing the area logs it.
+    await page.getByRole("tab", { name: "Details" }).click();
     await page.getByRole("button", { name: "Remove area Frontend" }).click();
     await save(page);
+    await page.getByRole("tab", { name: "History" }).click();
     await expect(page.getByText("Area: Frontend → None")).toBeVisible();
 
     // Another project never sees this project's values (FR-021).

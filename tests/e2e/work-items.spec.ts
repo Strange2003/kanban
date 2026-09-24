@@ -83,6 +83,7 @@ test.describe("Work Items", () => {
     await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Match the new brand colors.", {
       timeout: 15000,
     });
+    await page.getByRole("tab", { name: "History" }).click();
     // One save logs one "fields_edited" entry listing every changed field, e.g.
     // "Edited tags, description".
     await expect(page.getByText(/^Edited .*\bdescription\b/)).toBeVisible();

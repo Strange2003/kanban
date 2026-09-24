@@ -50,6 +50,13 @@
       "when": 1790141752044,
       "tag": "0006_drop_stakeholder",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790277293653,
+      "tag": "0007_tired_maginty",
+      "breakpoints": true
     }
   ]
 }

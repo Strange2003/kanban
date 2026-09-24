@@ -28,14 +28,16 @@ test.describe("Assignee (011-agent-access-mcp US1)", () => {
     await expect(picker.locator("option")).toHaveText(["Unassigned", "Ana", "Beto"]);
     await picker.selectOption({ label: "Beto" });
     await ownerPage.getByRole("button", { name: "Save" }).click();
-    await expect(ownerPage.getByText(/Assigned to Beto — by Ana/)).toBeVisible();
+    await ownerPage.getByRole("tab", { name: "History" }).click();
+    await expect(ownerPage.getByText("Assigned to Beto")).toBeVisible();
 
     // Assigning yourself doesn't notify anyone.
     await backToBoard(ownerPage);
     await openCard(ownerPage, "Weekly report");
     await ownerPage.getByLabel("Assignee").selectOption({ label: "Ana" });
     await ownerPage.getByRole("button", { name: "Save" }).click();
-    await expect(ownerPage.getByText(/Assigned to Ana — by Ana/)).toBeVisible();
+    await ownerPage.getByRole("tab", { name: "History" }).click();
+    await expect(ownerPage.getByText("Assigned to Ana")).toBeVisible();
 
     // The card shows the assignee.
     await backToBoard(ownerPage);
@@ -66,6 +68,7 @@ test.describe("Assignee (011-agent-access-mcp US1)", () => {
     await expect(ownerPage.getByRole("listitem").filter({ hasText: "Beto" })).toBeHidden();
     await ownerPage.goto(`${projectUrl}/work-items/1`);
     await expect(ownerPage.getByLabel("Assignee")).toHaveValue("");
+    await ownerPage.getByRole("tab", { name: "History" }).click();
     await expect(ownerPage.getByText(/Unassigned \(Beto left the project\)/)).toBeVisible();
 
     await ownerContext.close();

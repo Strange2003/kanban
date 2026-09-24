@@ -216,6 +216,9 @@ export const workItems = pgTable(
     // 008-work-item-fields data-model.md § Work Item — all optional.
     priority: workItemPriorityEnum("priority"),
     severity: workItemSeverityEnum("severity"),
+    // 012-work-item-discussion: optional estimate; spent time is derived from
+    // work_item_time_entries so the two cannot drift apart.
+    estimateMinutes: integer("estimate_minutes"),
     // `set null` is only defensive: no flow deletes a catalog value (FR-007),
     // and deleting the project already cascades to its Work Items.
     areaId: integer("area_id").references(() => areas.id, { onDelete: "set null" }),
@@ -256,6 +259,45 @@ export const workItems = pgTable(
       "work_items_dates_order_check",
       sql`${table.startDate} IS NULL OR ${table.targetDate} IS NULL OR ${table.targetDate} >= ${table.startDate}`,
     ),
+    check("work_items_estimate_minutes_check", sql`${table.estimateMinutes} IS NULL OR ${table.estimateMinutes} BETWEEN 0 AND 600000`),
+  ],
+);
+
+// 012-work-item-discussion: human conversation, separate from the audit log.
+export const workItemComments = pgTable(
+  "work_item_comments",
+  {
+    id: serial("id").primaryKey(),
+    publicId: text("public_id").notNull().unique(),
+    workItemId: integer("work_item_id").notNull().references(() => workItems.id, { onDelete: "cascade" }),
+    authorUserId: text("author_user_id").notNull(),
+    authorName: text("author_name").notNull(),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("work_item_comments_item_created_idx").on(table.workItemId, table.createdAt, table.id),
+    check("work_item_comments_body_check", sql`length(btrim(${table.body})) BETWEEN 1 AND 10000`),
+  ],
+);
+
+// Individual time entries preserve who logged the work; the total is a sum.
+export const workItemTimeEntries = pgTable(
+  "work_item_time_entries",
+  {
+    id: serial("id").primaryKey(),
+    publicId: text("public_id").notNull().unique(),
+    workItemId: integer("work_item_id").notNull().references(() => workItems.id, { onDelete: "cascade" }),
+    authorUserId: text("author_user_id").notNull(),
+    authorName: text("author_name").notNull(),
+    minutes: integer("minutes").notNull(),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("work_item_time_entries_item_created_idx").on(table.workItemId, table.createdAt, table.id),
+    check("work_item_time_entries_minutes_check", sql`${table.minutes} BETWEEN 1 AND 600000`),
+    check("work_item_time_entries_note_check", sql`${table.note} IS NULL OR length(${table.note}) <= 500`),
   ],
 );
 

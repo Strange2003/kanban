@@ -154,6 +154,7 @@ const workItemFieldsSchema = z.object({
   // 008-work-item-fields: `undefined` leaves a field alone, `null` clears it.
   priority: levelSchema,
   severity: levelSchema,
+  estimateMinutes: z.number().int().min(0).max(600000).nullable().optional(),
   areaName: catalogNameSchema,
   iterationName: catalogNameSchema,
   startDate: calendarDateSchema,
@@ -169,6 +170,7 @@ export type WorkItemFieldsInput = {
   tagNames?: string[];
   priority?: WorkItemLevel | null;
   severity?: WorkItemLevel | null;
+  estimateMinutes?: number | null;
   areaName?: string | null;
   iterationName?: string | null;
   startDate?: string | null;
@@ -489,6 +491,10 @@ async function applyWorkItemFieldsWithinTx(
   if (data.severity !== undefined && data.severity !== workItem.severity) {
     changedFields.severity = { from: workItem.severity, to: data.severity };
     updates.severity = data.severity;
+  }
+  if (data.estimateMinutes !== undefined && data.estimateMinutes !== workItem.estimateMinutes) {
+    changedFields.estimateMinutes = { from: workItem.estimateMinutes, to: data.estimateMinutes };
+    updates.estimateMinutes = data.estimateMinutes;
   }
 
   // FR-009 of 008: judged on the RESULTING pair, so changing only one date

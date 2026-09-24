@@ -54,6 +54,8 @@ vi.mock("@/db/client", async () => {
         return [
           { id: 1, projectId: 1, displayNumber: 1, stageId: 1, title: "T", position: 0, parentWorkItemId: null },
         ];
+      case "work_item_time_entries":
+        return [{ publicId: "entry-1", workItemId: 1, authorUserId: "actor", minutes: 30 }];
       default:
         return [];
     }
@@ -118,6 +120,7 @@ import {
 } from "@/lib/actions/projects";
 import { sendInvitation, cancelInvitation, listPendingInvitations } from "@/lib/actions/accounts-invitations";
 import type { Result } from "@/lib/errors";
+import { addWorkItemComment, addWorkItemTimeEntry, removeWorkItemTimeEntry } from "@/lib/actions/work-item-discussion";
 
 type Case = {
   /** Exported name, checked for completeness by the "every action is covered" test at the bottom. */
@@ -155,6 +158,9 @@ export const CASES: Case[] = [
   { action: "deleteWorkItem", permission: "workItem:edit", run: () => deleteWorkItem(1), denied: READ_ONLY_DENIED, allowed: EDITORS },
   // 008-work-item-fields (FR-014/FR-019): "Close" moves the Work Item, so it's a Work Item edit.
   { action: "closeWorkItem", permission: "workItem:edit", run: () => closeWorkItem(1), denied: READ_ONLY_DENIED, allowed: EDITORS },
+  { action: "addWorkItemTimeEntry", permission: "workItem:edit", run: () => addWorkItemTimeEntry({ workItemId: 1, minutes: 30 }), denied: READ_ONLY_DENIED, allowed: EDITORS },
+  { action: "removeWorkItemTimeEntry", permission: "workItem:edit", run: () => removeWorkItemTimeEntry("entry-1"), denied: READ_ONLY_DENIED, allowed: EDITORS },
+  { action: "addWorkItemComment", permission: "workItem:comment", run: () => addWorkItemComment({ workItemId: 1, body: "Hello" }), denied: [], allowed: ["owner", "member", "viewer"] },
 
   // --- relationship:edit (lib/actions/work-item-relationships.ts)
   { action: "setWorkItemParent", permission: "relationship:edit", run: () => setWorkItemParent({ workItemId: 1, parentWorkItemId: 2 }), denied: READ_ONLY_DENIED, allowed: EDITORS },
@@ -229,6 +235,7 @@ import * as projectsModule from "@/lib/actions/projects";
 import * as workItemsModule from "@/lib/actions/work-items";
 import * as workItemRelationshipsModule from "@/lib/actions/work-item-relationships";
 import * as workItemViewsModule from "@/lib/actions/work-item-views";
+import * as workItemDiscussionModule from "@/lib/actions/work-item-discussion";
 
 // Reads gated by `requireProjectMember` alone (any member, a Viewer included, may read), or
 // actions that aren't scoped to a project's role at all.
@@ -241,6 +248,7 @@ const MEMBERSHIP_ONLY_READS = [
   "getWorkItemRelations",
   "listProjectWorkItems",
   "getWorkItemDetailData",
+  "getWorkItemDiscussionData",
   "getWorkItemsView", // 009-work-item-views: read-only List/Table data (FR-017)
   "listProjectMembers",
   "listMyProjects", // only the caller's own projects
@@ -261,6 +269,7 @@ describe("every exported Server Action is classified", () => {
     workItemsModule,
     workItemRelationshipsModule,
     workItemViewsModule,
+    workItemDiscussionModule,
   ].flatMap((module) => Object.entries(module).filter(([, value]) => typeof value === "function").map(([name]) => name));
 
   it("has no export missing from the permission sweep, the membership-only reads or the known exceptions", () => {

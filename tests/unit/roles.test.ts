@@ -17,6 +17,7 @@ const SPEC_MATRIX: Record<Permission, [boolean, boolean, boolean]> = {
   "invitation:cancelOwn": [true, true, false],
   "board:edit": [true, true, false],
   "workItem:edit": [true, true, false],
+  "workItem:comment": [true, true, true],
   "relationship:edit": [true, true, false],
 };
 
@@ -35,10 +36,9 @@ describe("permission matrix (spec.md § Matriz de permisos)", () => {
     });
   }
 
-  it("never lets a viewer modify anything", () => {
+  it("lets a viewer comment and leave, but not edit project data", () => {
     const viewerAllowed = ALL_PERMISSIONS.filter((permission) => can("viewer", permission));
-    // The only thing a viewer may do beyond reading is leaving the project.
-    expect(viewerAllowed).toEqual(["project:leave"]);
+    expect(viewerAllowed).toEqual(["project:leave", "workItem:comment"]);
   });
 
   it("keeps every owner-management permission exclusive to the owner (FR-014)", () => {

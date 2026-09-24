@@ -18,6 +18,7 @@ import {
 import type { AssigneeView } from "@/lib/work-item-view";
 import { getWorkItemAndProject, workItemIsAncestorOf } from "@/lib/work-item-queries";
 import { listCatalog } from "@/lib/work-item-catalogs";
+import { getWorkItemDiscussionData, type WorkItemDiscussionData } from "@/lib/actions/work-item-discussion";
 
 // A Work Item reference as shown in a relations list — enough to render and
 // navigate to it without an extra query (FR-009/FR-010 of 005-work-item-relationships).
@@ -360,6 +361,7 @@ export async function listProjectWorkItems(
 }
 
 export type WorkItemDetailData = {
+  discussion: WorkItemDiscussionData;
   catalogTags: string[];
   itemTags: string[];
   activity: WorkItemActivityEntry[];
@@ -470,6 +472,7 @@ export async function getWorkItemDetailData(
       relationsResult,
       pickableResult,
       fieldsDetail,
+      discussionResult,
     ] = await Promise.all([
       member,
       listProjectTags(projectPublicId),
@@ -478,6 +481,7 @@ export async function getWorkItemDetailData(
       getWorkItemRelations(workItemId),
       listProjectWorkItems(projectPublicId, workItemId),
       fields,
+      getWorkItemDiscussionData(workItemId),
     ]);
 
     if (!catalogResult.ok)
@@ -490,6 +494,8 @@ export async function getWorkItemDetailData(
       throw new AppError(relationsResult.error.code, relationsResult.error.message);
     if (!pickableResult.ok)
       throw new AppError(pickableResult.error.code, pickableResult.error.message);
+    if (!discussionResult.ok)
+      throw new AppError(discussionResult.error.code, discussionResult.error.message);
 
     return {
       catalogTags: catalogResult.data.map((t) => t.name),
@@ -497,6 +503,7 @@ export async function getWorkItemDetailData(
       activity: activityResult.data,
       relations: relationsResult.data,
       pickableWorkItems: pickableResult.data,
+      discussion: discussionResult.data,
       role: membership.role,
       ...fieldsDetail,
     };

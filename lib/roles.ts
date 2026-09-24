@@ -22,6 +22,7 @@ export type Permission =
   | "invitation:cancelOwn"
   | "board:edit"
   | "workItem:edit"
+  | "workItem:comment"
   | "relationship:edit";
 
 // One key per row of the spec's matrix (contracts/roles-permissions.md § Matriz
@@ -41,6 +42,7 @@ const PERMISSIONS: Record<Permission, readonly ProjectRole[]> = {
   "invitation:cancelOwn": ["owner", "member"],
   "board:edit": ["owner", "member"],
   "workItem:edit": ["owner", "member"],
+  "workItem:comment": ["owner", "member", "viewer"],
   "relationship:edit": ["owner", "member"],
 };
 

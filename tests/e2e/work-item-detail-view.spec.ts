@@ -94,6 +94,7 @@ test.describe("Work Item Detail View", () => {
     await page.waitForLoadState("networkidle");
 
     await page.reload();
+    await page.getByRole("tab", { name: "History" }).click();
     await expect(page.getByText(/edited description/i)).toBeVisible();
   });
 

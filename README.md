@@ -18,10 +18,10 @@ Existing self-hostable alternatives (Kan.bn, Kaneo, Vikunja, Planka, WeKan, Kanb
 - **Accounts**: sign up with Google or email/password (with email verification and password recovery).
 - **Projects**: the top-level container. A project is automatically classified as **Personal** (1 member) or **Shared** (2+ members) — you never set this manually, it's derived from who's on the project.
 - **Unlimited collaborators**: invite anyone by email, no cap on project members, ever. That's a non-negotiable product principle, not a pricing tier.
-- **Roles**: every member is an **Owner** (exactly one per project — manages the project and its members, and can transfer ownership), a **Member** (edits everything and can invite) or a **Viewer** (read-only). Whoever invites picks the role; the owner can change it later.
+- **Roles**: every member is an **Owner** (exactly one per project — manages the project and its members, and can transfer ownership), a **Member** (edits everything and can invite) or a **Viewer** (can read and comment on Work Items, but cannot edit their fields). Whoever invites picks the role; the owner can change it later.
 - **Views**: every project can be seen as a **Board** (the Kanban, the main view), a **List** (a collapsible parent/child backlog) or a **Table** (every field, sortable and filterable — filters live in the URL, so a filtered view can be shared). List and Table are read-only; editing happens on the board and in a Work Item's detail view.
 - **Board**: each project has one Kanban board. Columns and "stages" are the same thing — create/rename/delete/reorder columns freely, all via drag-and-drop. Any column can be marked as a **closing column** (e.g. "Done"): Work Items in it are closed.
-- **Work Items**: the cards on the board. Each gets a short, human-readable ID (e.g. `KAN-42`), a title, description, an **assignee** (one of the project's members, who gets an in-app notification) and tags from a per-project catalog; plus priority and severity (Critical / High / Medium / Low), an area and an iteration from per-project catalogs, and optional start and target dates. A Work Item records when it was created, last modified and closed — it closes when it enters a closing column (by dragging, or with its "Close" button) and reopens when it leaves; a past target date on an open Work Item shows as overdue. Its history records who made each change.
+- **Work Items**: the cards on the board. Each gets a short, human-readable ID (e.g. `KAN-42`), a title, description, an **assignee** (one of the project's members, who gets an in-app notification) and tags from a per-project catalog; plus priority and severity (Critical / High / Medium / Low), an area and an iteration from per-project catalogs, and optional start and target dates. Any project member can comment; Owners and Members can set a time estimate and log individual time entries. A Work Item records when it was created, last modified and closed — it closes when it enters a closing column (by dragging, or with its "Close" button) and reopens when it leaves; a past target date on an open Work Item shows as overdue. Its audit trail is available in a separate History tab.
 - **AI agents**: connect an AI assistant (Claude Code, Claude Desktop, claude.ai or any other [MCP](https://modelcontextprotocol.io) client) and ask it to read your projects, create and assign Work Items, move them between columns or reorganize the board — personal and shared projects alike. It signs in as you through a consent screen (no keys to copy), acts with exactly your role in each project, can't manage members or projects, its changes are marked "via <agent>" in the history, and you can revoke it at any time. See [Connecting an AI agent](#connecting-an-ai-agent-mcp).
 
 ## Tech stack
@@ -136,7 +136,7 @@ This project follows **Spec-Driven Development**: every feature is specified, cl
 - ✅ **Phase 3 (planning & views)** — extended Work Item fields and closing columns ([`specs/008-work-item-fields`](specs/008-work-item-fields/)) and the List and Table views ([`specs/009-work-item-views`](specs/009-work-item-views/)) **implemented**, with the unit and end-to-end suites green (a calendar view is deferred); the manual quickstart passes of 008 (T052) and 009 (T028) are still open
 - ✅ **Deployment** — the first instance runs on Render against its own production Neon branch (all migrations `0000`-`0004` applied); development and the e2e suite use a separate `dev` branch
 - ✅ **Public legal pages** ([`specs/010-legal-pages`](specs/010-legal-pages/)) — `/privacy` and `/terms`, required by Google to publish "Sign in with Google" beyond test users
-- 🟡 **Phase 4** — [`specs/011-agent-access-mcp`](specs/011-agent-access-mcp/): AI agent access over MCP (OAuth consent, the user's own role, connected-agents page) and the **Assignee** field that replaces the free-text stakeholder, with assignment notifications — **implemented on its branch** with the unit and end-to-end suites green; pending merge, migrations `0005`-`0006` on production, deploy, and the manual check with a real assistant (T057). The rest of Phase 4 isn't confirmed yet (see [Roadmap](#roadmap))
+- 🟡 **Phase 4** — [`specs/011-agent-access-mcp`](specs/011-agent-access-mcp/) is merged to `main`: AI agent access over MCP and the Work Item Assignee field. [`specs/012-work-item-discussion`](specs/012-work-item-discussion/) adds the redesigned Work Item detail, comments, time tracking and a separate History tab on its feature branch; unit checks, a production build and 19 affected e2e scenarios pass. Migration `0007` is applied to the disposable development database; production deployment is pending.
 
 ## Roadmap
 
@@ -156,10 +156,10 @@ This project follows **Spec-Driven Development**: every feature is specified, cl
 9. Extended fields (priority, severity, area, iteration, dates, closing columns) ✅ *done*
 
 **Phase 4**
-11. AI agent access (MCP) + Work Item assignee 🟡 *implemented, pending merge*
+11. AI agent access (MCP) + Work Item assignee ✅ *merged*
+12. Work Item discussion, time tracking and detail layout 🟡 *implemented on a feature branch*
 
 Candidates *(not yet confirmed in scope)*:
-- Discussion / comments on Work Items (listed in the original vision's data hierarchy and Work Item reference)
 - Calendar view (deferred from Phase 3; Work Items already store start, target and closing dates for it)
 - Managing catalogs: rename/delete tags, areas and iterations (every catalog only grows today)
 
