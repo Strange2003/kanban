@@ -65,7 +65,7 @@ export function NotificationsPanelClient({ notifications }: { notifications: Not
         )}
       </Button>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={setOpen} dismissible>
         <DialogHeader>
           <DialogTitle>Notifications</DialogTitle>
         </DialogHeader>

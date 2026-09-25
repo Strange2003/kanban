@@ -162,15 +162,20 @@ export function WorkItemCard({
       )}
       {canEdit && (stages.length > 1 || canMoveUp || canMoveDown) && (
         <div
-          className="mt-2 flex items-center gap-1 border-t border-border pt-2"
+          className={cn(
+            "mt-2 flex items-center gap-1 border-t border-border pt-2 md:justify-end",
+            !canMoveUp && !canMoveDown && "md:hidden",
+          )}
           onPointerDown={(e) => e.stopPropagation()}
         >
+          {/* Desktop moves cards by dragging; on phones the card doesn't drag (touch
+              scrolls the board), so the column picker stays there only. */}
           {stages.length > 1 && (
             <select
               aria-label={`Move ${workItem.displayId} to column`}
               value={workItem.stageId}
               onChange={(e) => onMove(workItem.id, Number(e.target.value))}
-              className="min-w-0 flex-1 rounded border border-input bg-background px-1 py-1 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              className="min-w-0 flex-1 md:hidden rounded border border-input bg-background px-1 py-1 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
               {stages.map((stage) => (
                 <option key={stage.id} value={stage.id}>

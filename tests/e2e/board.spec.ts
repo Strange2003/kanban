@@ -104,8 +104,12 @@ test.describe("Kanban board", () => {
     await page.getByRole("textbox", { name: "Column name for To do" }).press("Enter");
     await expect(page.getByRole("heading", { name: "Ready", level: 3 })).toBeVisible();
 
+    // Desktop moves cards by dragging, so the column picker only shows on phones.
     const card = page.locator('[data-testid="work-item-card"]', { hasText: "Review the layout" });
-    await card.getByRole("combobox", { name: /Move .* to column/ }).selectOption({ label: "Doing" });
+    const columnPicker = card.getByRole("combobox", { name: /Move .* to column/ });
+    await expect(columnPicker).toBeHidden();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await columnPicker.selectOption({ label: "Doing" });
     await expect(stageColumn(page, "Doing").getByTestId("work-item-card")).toContainText("Review the layout");
   });
 
