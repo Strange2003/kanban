@@ -19,4 +19,4 @@ description: "Task list for 012-work-item-discussion"
 - [x] T011 [P] [F12-US3] Verificar estimación, suma, borrado y permisos en `tests/unit/work-item-discussion.test.ts` y `tests/e2e/work-item-discussion.spec.ts`.
 - [x] T012 Ejecutar ESLint, TypeScript, Vitest, build y revisión visual; actualizar `specs/012-work-item-discussion/tasks.md`.
 
-La migración `0007` se aplicó a la base desechable de `.env.local`. Con autorización del usuario se ejecutaron 19 escenarios e2e afectados: 18 pasaron inicialmente y el único fallo fue un error de navegación del propio test, corregido y aprobado al repetirlo. La migración de producción sigue pendiente de despliegue.
+La migración `0007` se aplicó a la base desechable de `.env.local`. Con autorización del usuario se ejecutaron 19 escenarios e2e afectados: 18 pasaron inicialmente y el único fallo fue un error de navegación del propio test, corregido y aprobado al repetirlo. La migración `0007` se aplicó después también a producción (2026-09-24), y la feature está desplegada en Render.

@@ -128,7 +128,7 @@ esta fase.
 - [X] T014 [P] Actualizar `AGENTS.md`: agregar `010-legal-pages` a la lista de specs (§ Start here) y `lib/legal.ts` entre los módulos puros; en § Current state, la primera instancia desplegada en Render.
 - [X] T015 Desde la raíz del repositorio, correr `npm run lint`, `npm run test` y `npx tsc --noEmit`, y corregir cualquier fallo.
 - [X] T016 Correr `npm run test:e2e` contra la base `dev`: todas las suites existentes y `tests/e2e/legal-pages.spec.ts` deben quedar en verde. Registrar el resultado en esta tarea. — *Hecho 2026-09-22*: **56/56 en verde** (15.5 min), incluidos los 5 tests nuevos de `legal-pages.spec.ts`.
-- [ ] T017 Correr manualmente `quickstart.md` de punta a punta (bloques 1 a 5), incluido el bloque 5 en producción: variables del operador en Render, URLs en Google y "Publicar app", y login con una cuenta de Google que no sea usuario de prueba (SC-001). Registrar los resultados.
+- [X] T017 Correr manualmente `quickstart.md` de punta a punta (bloques 1 a 5), incluido el bloque 5 en producción: variables del operador en Render, URLs en Google y "Publicar app", y login con una cuenta de Google que no sea usuario de prueba (SC-001). Registrar los resultados. — *Hecho 2026-09-24*: con la app de Google publicada en producción (2026-09-22), una cuenta de Google que no estaba en la lista de usuarios de prueba inició sesión en Render y se unió a un proyecto por invitación (SC-001).
 
 ---
 
