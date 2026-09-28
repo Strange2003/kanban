@@ -57,6 +57,13 @@
       "when": 1790277293653,
       "tag": "0007_tired_maginty",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790360652061,
+      "tag": "0008_project_catalogs",
+      "breakpoints": true
     }
   ]
 }

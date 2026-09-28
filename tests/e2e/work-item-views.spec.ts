@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { iterations, projects, stages, workItems } from "@/db/schema";
+import { projects, sizes, stages, workItems } from "@/db/schema";
 import { signUpNewUser, createProjectViaUi, addColumn, addWorkItem, inviteAndAccept } from "./helpers";
 
 // quickstart.md of 009-work-item-views. Projects, columns and Work Items are
@@ -107,15 +107,15 @@ test.describe("Views — sortable, filterable table (US2)", () => {
     for (const title of ["Alpha", "Bravo", "Charlie", "Delta", "Echo"]) await addWorkItem(page, title);
 
     const project = await setFields(projectUrl, "Alpha", { priority: "low" });
-    const [sprint] = await db.insert(iterations).values({ projectId: project.id, name: "Sprint 12" }).returning();
+    const [sprint] = await db.insert(sizes).values({ projectId: project.id, name: "Sprint 12", position: 0 }).returning();
     const stageRows = await db.select().from(stages).where(eq(stages.projectId, project.id));
     const done = stageRows.find((s) => s.name === "Done")!;
     const doing = stageRows.find((s) => s.name === "Doing")!;
     await db.update(stages).set({ isClosing: true }).where(eq(stages.id, done.id));
-    await setFields(projectUrl, "Bravo", { priority: "critical", iterationId: sprint!.id });
+    await setFields(projectUrl, "Bravo", { priority: "critical", sizeId: sprint!.id });
     await setFields(projectUrl, "Charlie", { priority: "critical", stageId: done.id, closedAt: new Date() });
     await setFields(projectUrl, "Delta", { targetDate: localDate(-1), stageId: doing.id });
-    await setFields(projectUrl, "Echo", { priority: "high", iterationId: sprint!.id });
+    await setFields(projectUrl, "Echo", { priority: "high", sizeId: sprint!.id });
 
     await page.goto(`${projectUrl}/table`);
     await expect(tableRows(page)).toHaveCount(5);
@@ -138,8 +138,8 @@ test.describe("Views — sortable, filterable table (US2)", () => {
     await page.getByRole("group", { name: "Priority filter" }).getByLabel("Critical").check();
     await page.keyboard.press("Escape");
     await page.getByRole("button", { name: /More filters/ }).click();
-    await page.getByTestId("view-filters").getByRole("button", { name: /^Iteration/ }).click();
-    await page.getByRole("group", { name: "Iteration filter" }).getByLabel("Sprint 12").check();
+    await page.getByTestId("view-filters").getByRole("button", { name: /^Size/ }).click();
+    await page.getByRole("group", { name: "Size filter" }).getByLabel("Sprint 12").check();
     await page.keyboard.press("Escape");
     await expect.poll(() => firstCells(page)).toEqual(["Bravo"]);
     await expect(page.getByTestId("view-count")).toHaveText("1 of 5");

@@ -12,6 +12,7 @@ import { useLocalToday } from "@/lib/dates";
 import { LEVEL_LABELS, isOverdue } from "@/lib/work-item-fields";
 import { PriorityBadge } from "@/components/board/PriorityBadge";
 import { TargetDateChip } from "@/components/board/TargetDateChip";
+import { TagColorBar } from "@/components/board/TagColorBar";
 import { Avatar } from "@/components/ui/avatar";
 
 export function WorkItemCard({
@@ -63,6 +64,8 @@ export function WorkItemCard({
     overdue && "overdue",
     // FR-007 of 011-agent-access-mcp.
     workItem.assignee && `assigned to ${workItem.assignee.name}`,
+    // FR-010 of 013-project-catalogs: the color line is decorative; the tags are named here.
+    workItem.tags.length > 0 && `tags: ${workItem.tags.map((t) => t.name).join(", ")}`,
   ]
     .filter(Boolean)
     .join(", ");
@@ -106,7 +109,7 @@ export function WorkItemCard({
         opacity: isDragging ? 0.4 : 1,
       }}
       className={cn(
-        "rounded-md border border-border bg-background p-2 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "relative rounded-md border border-border bg-background p-2 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         canEdit
           ? "cursor-grab touch-auto active:cursor-grabbing md:touch-none"
           : "cursor-pointer",
@@ -206,6 +209,7 @@ export function WorkItemCard({
           )}
         </div>
       )}
+      <TagColorBar tags={workItem.tags} />
     </div>
   );
 }
@@ -214,7 +218,7 @@ export function WorkItemCard({
 // Board.tsx) — a static copy, since the real card stays in its column.
 export function WorkItemCardPreview({ workItem }: { workItem: BoardWorkItem }) {
   return (
-    <div className="cursor-grabbing rounded-md border border-border bg-background p-2 text-sm shadow-lg ring-1 ring-primary/20">
+    <div className="relative cursor-grabbing rounded-md border border-border bg-background p-2 text-sm shadow-lg ring-1 ring-primary/20">
       <span className="text-muted-foreground text-xs">{workItem.displayId}</span>
       <p className="font-medium">{workItem.title}</p>
       {(workItem.priority || workItem.targetDate || workItem.assignee) && (
@@ -233,6 +237,7 @@ export function WorkItemCardPreview({ workItem }: { workItem: BoardWorkItem }) {
           )}
         </div>
       )}
+      <TagColorBar tags={workItem.tags} />
     </div>
   );
 }

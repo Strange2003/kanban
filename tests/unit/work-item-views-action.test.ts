@@ -84,7 +84,7 @@ beforeEach(() => {
         stagePosition: 2,
         isClosed: true,
         areaName: "Frontend",
-        iterationName: null,
+        sizeName: null,
       },
     ],
     work_item_tags: [
@@ -93,8 +93,12 @@ beforeEach(() => {
     ],
     stages: [{ publicId: "stage-done", name: "Done", isClosing: true }],
     areas: [{ name: "Frontend" }],
-    iterations: [],
-    tags: [{ name: "auth" }, { name: "ux" }],
+    sizes: [],
+    // 013-project-catalogs: the tag catalog comes with colors, in manual order.
+    tags: [
+      { name: "auth", color: "blue" },
+      { name: "ux", color: "gray" },
+    ],
   };
 });
 
@@ -127,15 +131,18 @@ describe("getWorkItemsView", () => {
       stageName: "Done",
       isClosed: true,
       areaName: "Frontend",
-      iterationName: null,
+      sizeName: null,
       tags: ["auth", "ux"],
       assignee: null,
     });
     expect(result.data.options).toEqual({
       stages: [{ publicId: "stage-done", name: "Done", isClosing: true }],
       areas: ["Frontend"],
-      iterations: [],
-      tags: ["auth", "ux"],
+      sizes: [],
+      tags: [
+        { name: "auth", color: "blue" },
+        { name: "ux", color: "gray" },
+      ],
       // The fake answers every project_members read with the same rows.
       members: fake.rows.project_members,
     });

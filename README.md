@@ -31,7 +31,8 @@ Existing self-hostable alternatives (Kan.bn, Kaneo, Vikunja, Planka, WeKan, Kanb
 
 **Work Items**
 - A short, human-readable ID per project (e.g. `KAN-42`), title and plain-text description.
-- **Assignee** (one project member, who gets notified), **tags**, **priority** and **severity** (Critical / High / Medium / Low), **area** and **iteration** (per-project catalogs), and optional **start** and **target dates** — an open Work Item past its target date shows as overdue.
+- **Assignee** (one project member, who gets notified), **tags** with a color, **priority** and **severity** (Critical / High / Medium / Low), **area** and **size** (e.g. S / M / L / XL), and optional **start** and **target dates** — an open Work Item past its target date shows as overdue.
+- **Per-project catalogs**: each project manages its own tags (name + color from a fixed palette), areas and sizes — create, rename, reorder and delete them from the project's "Tags" page (nested under the project in the sidebar), or create one on the spot from a Work Item. A card on the board shows a thin line with its tags' colors. Deleting a value removes it from every Work Item, and each one's history says so.
 - **Relationships**: one parent with many children (a hierarchy), plus "related" links.
 - **Detail view** with a side panel for every field, the description, relationships and a **discussion**: any member, Viewers included, can comment.
 - **Time tracking**: an estimate plus individual time entries (with an optional note); the total spent is the sum of the entries.
@@ -57,8 +58,8 @@ A quick tour for someone opening an instance for the first time:
 3. **Shape the board**: add, rename and drag columns (e.g. To do / Doing / Done). Click the check-circle icon on a column to mark it as a closing column.
 4. **Add Work Items** with "+ Add work item" at the bottom of a column. Click a card to open its detail view and fill in the assignee, tags, priority, dates, estimate, and so on.
 5. **Invite people** from the project's settings (gear icon → Members → Invite) with their email and a role (Member or Viewer). Invitations are delivered **inside the app**, not by email: tell the person to sign up on your instance **with that same email address**, and the invitation will be waiting in their bell to accept. Pending invitations can be seen and cancelled from the project's settings.
-6. **Work together**: move cards as work progresses, comment on Work Items, log time, and switch to the List or Table view to review the backlog or filter by assignee, priority, iteration, etc.
-7. **Project settings** (gear icon, top right of the project): rename or describe the project, manage members and roles, transfer ownership, leave the project, or delete it (Owner only).
+6. **Work together**: move cards as work progresses, comment on Work Items, log time, and switch to the List or Table view to review the backlog or filter by assignee, priority, size, etc.
+7. **Project settings** (gear icon, top right of the project): rename or describe the project, manage members and roles, transfer ownership, leave the project, or delete it (Owner only). The project's **tags, areas and sizes** have their own page, also reachable from "Tags" under the open project in the sidebar.
 8. *(Optional)* **Connect your AI assistant** — see below.
 
 > The board doesn't update live: other members see your changes the next time they open or refresh the board. This is intentional (no WebSockets) at this stage.
@@ -73,6 +74,7 @@ Every project has exactly one Owner. Whoever invites picks the role; the Owner c
 | Comment on Work Items | ✅ | ✅ | ✅ |
 | Create, edit, move and delete Work Items; relationships; estimates and time entries | ✅ | ✅ | — |
 | Create, rename, reorder and delete columns | ✅ | ✅ | — |
+| Create, rename, recolor, reorder and delete tags, areas and sizes | ✅ | ✅ | — |
 | Invite people, see pending invitations, cancel their own invitations | ✅ | ✅ | — |
 | Cancel anyone's invitation, remove members, change roles | ✅ | — | — |
 | Rename/describe or delete the project, transfer ownership | ✅ | — | — |
@@ -244,7 +246,7 @@ This project follows **Spec-Driven Development** with [Spec Kit](https://github.
 - ✅ **Phase 2 (depth)** — relationships ([`005`](specs/005-work-item-relationships/)), detail view ([`006`](specs/006-work-item-detail-view/)), roles & permissions ([`007`](specs/007-roles-permissions/))
 - ✅ **Phase 3 (planning & views)** — extended fields and closing columns ([`008`](specs/008-work-item-fields/)), List and Table views ([`009`](specs/009-work-item-views/))
 - ✅ **Legal pages** ([`010`](specs/010-legal-pages/)) — `/privacy` and `/terms`; Google sign-in published for everyone
-- ✅ **Phase 4 so far** — AI agent access over MCP + Work Item assignee ([`011`](specs/011-agent-access-mcp/)); collaborative Work Item detail with comments, time tracking and History tab ([`012`](specs/012-work-item-discussion/))
+- ✅ **Phase 4 so far** — AI agent access over MCP + Work Item assignee ([`011`](specs/011-agent-access-mcp/)); collaborative Work Item detail with comments, time tracking and History tab ([`012`](specs/012-work-item-discussion/)); per-project catalogs — tags with color, areas and sizes, with Size replacing Iteration ([`013`](specs/013-project-catalogs/))
 - ✅ **Deployment** — the first instance runs on Render against its own production Neon branch, migrated through `0007`
 
 Still open: the manual quickstart passes of 007 (T057), 008 (T052), 009 (T028) and 011 (T057 — end-to-end check with a real MCP client).
@@ -263,16 +265,16 @@ Still open: the manual quickstart passes of 007 (T057), 008 (T052), 009 (T028) a
 7. Roles & permissions
 
 **Phase 3 — Planning & views** ✅
-8. Extended fields (priority, severity, area, iteration, dates, closing columns)
+8. Extended fields (priority, severity, area, iteration — now size, dates, closing columns)
 9. List and Table views *(calendar deferred)*
 
 **Phase 4** 🟡
 11. AI agent access (MCP) + Work Item assignee ✅
 12. Work Item discussion, time tracking and detail layout ✅
+13. Per-project catalogs: tags with color, areas and sizes (Size replaces Iteration) ✅
 
 Candidates *(not yet confirmed in scope — each goes through `/speckit-specify` first)*:
 - Calendar view (Work Items already store start, target and closing dates)
-- Managing catalogs: rename/delete tags, areas and iterations (catalogs only grow today)
 - Comments and time entries through the MCP server
 
 ## Contributing

@@ -13,14 +13,14 @@ import {
   tags,
   workItemTags,
   areas,
-  iterations,
+  sizes,
 } from "@/db/schema";
 import { user } from "@/db/auth-schema";
 import { logActivity } from "@/lib/activity";
 import { requireProjectMember, requireProjectPermission } from "@/lib/permissions";
 import { AppError, runAction, type Result } from "@/lib/errors";
 import { getWorkItemAndProject } from "@/lib/work-item-queries";
-import { resolveCatalogValue, type CatalogKind } from "@/lib/work-item-catalogs";
+import { resolveCatalogValue } from "@/lib/work-item-catalogs";
 import { WORK_ITEM_LEVELS, type WorkItemLevel } from "@/lib/work-item-fields";
 import { nextClosedAt } from "@/lib/work-item-closing";
 import { setAssigneeWithinTx, translateAssigneeFkError } from "@/lib/work-item-assignee";
@@ -156,9 +156,14 @@ const workItemFieldsSchema = z.object({
   severity: levelSchema,
   estimateMinutes: z.number().int().min(0).max(600000).nullable().optional(),
   areaName: catalogNameSchema,
-  iterationName: catalogNameSchema,
+  sizeName: catalogNameSchema,
   startDate: calendarDateSchema,
   targetDate: calendarDateSchema,
+  // 013-project-catalogs: the detail view creates new tags/areas/sizes in its
+  // "Create new" pop-up BEFORE saving, so it sends `false` — an unknown name at
+  // save time means someone deleted it, and it must not silently come back.
+  // AI agents keep the default ("new names are created", FR-021 of 013).
+  createMissingCatalogValues: z.boolean().optional(),
 });
 type WorkItemFields = z.infer<typeof workItemFieldsSchema>;
 type ProjectRow = typeof projects.$inferSelect;
@@ -172,9 +177,10 @@ export type WorkItemFieldsInput = {
   severity?: WorkItemLevel | null;
   estimateMinutes?: number | null;
   areaName?: string | null;
-  iterationName?: string | null;
+  sizeName?: string | null;
   startDate?: string | null;
   targetDate?: string | null;
+  createMissingCatalogValues?: boolean;
 };
 
 const createWorkItemSchema = z.object({
@@ -450,13 +456,17 @@ export async function reorderWorkItemsInStage(input: {
   });
 }
 
-// The Work Item's current area/iteration name, for the change check and the
+// The Work Item's current area/size name, for the change check and the
 // activity payload (which records names, not ids — data-model.md § Log de actividad).
-async function catalogNameById(reader: Tx, kind: CatalogKind, id: number | null): Promise<string | null> {
+async function catalogNameById(reader: Tx, kind: "area" | "size", id: number | null): Promise<string | null> {
   if (id === null) return null;
-  const table = kind === "area" ? areas : iterations;
+  const table = kind === "area" ? areas : sizes;
   const [row] = await reader.select({ name: table.name }).from(table).where(eq(table.id, id)).limit(1);
   return row?.name ?? null;
+}
+
+function missingCatalogValue(name: string): AppError {
+  return new AppError("CATALOG_VALUE_NOT_FOUND", `"${name}" no longer exists in this project.`);
 }
 
 /**
@@ -513,11 +523,12 @@ async function applyWorkItemFieldsWithinTx(
     updates.targetDate = data.targetDate;
   }
 
-  const catalogChanges: { kind: CatalogKind; name: string | null }[] = [];
-  for (const kind of ["area", "iteration"] as const) {
-    const requested = kind === "area" ? data.areaName : data.iterationName;
+  const createMissing = data.createMissingCatalogValues ?? true;
+  const catalogChanges: { kind: "area" | "size"; name: string | null }[] = [];
+  for (const kind of ["area", "size"] as const) {
+    const requested = kind === "area" ? data.areaName : data.sizeName;
     if (requested === undefined) continue;
-    const current = await catalogNameById(tx, kind, kind === "area" ? workItem.areaId : workItem.iterationId);
+    const current = await catalogNameById(tx, kind, kind === "area" ? workItem.areaId : workItem.sizeId);
     // Same value in a different case ("FRONTEND" for "Frontend") is no change.
     if ((current ?? "").toLowerCase() === (requested ?? "").toLowerCase()) continue;
     catalogChanges.push({ kind, name: requested });
@@ -527,9 +538,10 @@ async function applyWorkItemFieldsWithinTx(
   // FR-006/FR-021 of 008: names are resolved (reused case-insensitively or
   // created) only within this Work Item's own project — never from a client-sent id.
   for (const { kind, name } of catalogChanges) {
-    const value = name === null ? null : await resolveCatalogValue(tx, kind, project.id, name);
+    const value = name === null ? null : await resolveCatalogValue(tx, kind, project.id, name, { create: createMissing });
+    if (name !== null && !value) throw missingCatalogValue(name);
     if (kind === "area") updates.areaId = value?.id ?? null;
-    else updates.iterationId = value?.id ?? null;
+    else updates.sizeId = value?.id ?? null;
     // Log the catalog's own spelling when an existing value was reused.
     if (value) (changedFields[kind] as { to: unknown }).to = value.name;
   }
@@ -548,7 +560,8 @@ async function applyWorkItemFieldsWithinTx(
     current = row;
   }
 
-  // FR-012 of 004: reuse existing catalog tags (case-insensitive), create the rest.
+  // FR-012 of 004: reuse existing catalog tags (case-insensitive), create the
+  // rest (gray, at the end of the catalog) unless createMissingCatalogValues is false.
   if (data.tagNames !== undefined) {
     const currentTagRows = await tx
       .select({ name: tags.name })
@@ -561,13 +574,10 @@ async function applyWorkItemFieldsWithinTx(
     if (JSON.stringify(currentNames) !== JSON.stringify(nextNames)) {
       const resolvedTagIds: number[] = [];
       for (const name of nextNames) {
-        const [existingTag] = await tx
-          .select()
-          .from(tags)
-          .where(and(eq(tags.projectId, project.id), sql`lower(${tags.name}) = lower(${name})`))
-          .limit(1);
-        const tag = existingTag ?? (await tx.insert(tags).values({ projectId: project.id, name }).returning())[0];
-        if (tag) resolvedTagIds.push(tag.id);
+        const tag = await resolveCatalogValue(tx, "tag", project.id, name, { create: createMissing });
+        // Throwing rolls back the whole transaction, so nothing is written.
+        if (!tag) throw missingCatalogValue(name);
+        resolvedTagIds.push(tag.id);
       }
 
       await tx.delete(workItemTags).where(eq(workItemTags.workItemId, workItem.id));
@@ -618,11 +628,12 @@ export async function updateWorkItem(
   });
 }
 
-// Supports updateWorkItem's tag selector (FR-012 of 004-work-items).
+// Supports updateWorkItem's tag selector (FR-012 of 004-work-items), in the
+// catalog's manual order (FR-017 of 013-project-catalogs).
 export async function listProjectTags(projectPublicId: string): Promise<Result<(typeof tags.$inferSelect)[]>> {
   return runAction(async () => {
     const { project } = await requireProjectMember(projectPublicId);
-    return db.select().from(tags).where(eq(tags.projectId, project.id)).orderBy(asc(tags.name));
+    return db.select().from(tags).where(eq(tags.projectId, project.id)).orderBy(asc(tags.position), asc(tags.id));
   });
 }
 
@@ -636,7 +647,9 @@ export async function getWorkItemTags(workItemId: number): Promise<Result<(typeo
       .select({ tag: tags })
       .from(workItemTags)
       .innerJoin(tags, eq(tags.id, workItemTags.tagId))
-      .where(eq(workItemTags.workItemId, workItemId));
+      .where(eq(workItemTags.workItemId, workItemId))
+      // A Work Item's own tags stay alphabetical (FR-017 of 013-project-catalogs).
+      .orderBy(asc(tags.name));
     return rows.map((r) => r.tag);
   });
 }

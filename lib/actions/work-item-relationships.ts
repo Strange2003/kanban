@@ -3,8 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { and, asc, eq, or, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { workItems, workItemRelatedLinks, stages, areas, iterations, projectMembers } from "@/db/schema";
+import { workItems, workItemRelatedLinks, stages, areas, sizes, projectMembers } from "@/db/schema";
 import { user } from "@/db/auth-schema";
+import type { TagColor } from "@/lib/tag-colors";
 import { logActivity } from "@/lib/activity";
 import { requireProjectMember, requireProjectPermission } from "@/lib/permissions";
 import { AppError, runAction, type Result } from "@/lib/errors";
@@ -362,7 +363,8 @@ export async function listProjectWorkItems(
 
 export type WorkItemDetailData = {
   discussion: WorkItemDiscussionData;
-  catalogTags: string[];
+  // With their colors (FR-011 of 013-project-catalogs), in the catalog's manual order.
+  catalogTags: { name: string; color: TagColor }[];
   itemTags: string[];
   activity: WorkItemActivityEntry[];
   relations: WorkItemRelations;
@@ -370,13 +372,13 @@ export type WorkItemDetailData = {
   // The caller's current role in the project (FR-005 of 007-roles-permissions):
   // lets the detail view render read-only for a Viewer.
   role: ProjectRole;
-  // 008-work-item-fields: the area/iteration catalogs (FR-005/FR-006), this Work
+  // 008-work-item-fields: the area/size catalogs (FR-005/FR-006; size was iteration before 013), this Work
   // Item's values by name, its column — `isClosing` means it's closed (FR-012) —
   // and whether the project has any closing column to enable "Close" (FR-014).
   catalogAreas: string[];
-  catalogIterations: string[];
+  catalogSizes: string[];
   itemArea: string | null;
-  itemIteration: string | null;
+  itemSize: string | null;
   stage: { name: string; isClosing: boolean };
   hasClosingStage: boolean;
   // 011-agent-access-mcp: the current assignee and every current member for
@@ -393,13 +395,13 @@ async function getFieldsDetail(projectId: number, workItemId: number, role: Proj
   // All four lookups at once: run one after another they added sequential
   // round trips to every detail page open (008 SC-007; found through a flaky
   // 005 e2e whose page took >2s to show a relation link).
-  const [[row], [closing], catalogAreas, catalogIterations, memberRows] = await Promise.all([
+  const [[row], [closing], catalogAreas, catalogSizes, memberRows] = await Promise.all([
     db
       .select({
         stageName: stages.name,
         isClosing: stages.isClosing,
         areaName: areas.name,
-        iterationName: iterations.name,
+        sizeName: sizes.name,
         assigneeUserId: workItems.assigneeUserId,
         assigneeName: user.name,
         assigneeImage: user.image,
@@ -407,7 +409,7 @@ async function getFieldsDetail(projectId: number, workItemId: number, role: Proj
       .from(workItems)
       .innerJoin(stages, eq(stages.id, workItems.stageId))
       .leftJoin(areas, eq(areas.id, workItems.areaId))
-      .leftJoin(iterations, eq(iterations.id, workItems.iterationId))
+      .leftJoin(sizes, eq(sizes.id, workItems.sizeId))
       .leftJoin(user, eq(user.id, workItems.assigneeUserId))
       .where(and(eq(workItems.id, workItemId), eq(workItems.projectId, projectId)))
       .limit(1),
@@ -417,7 +419,7 @@ async function getFieldsDetail(projectId: number, workItemId: number, role: Proj
       .where(and(eq(stages.projectId, projectId), eq(stages.isClosing, true)))
       .limit(1),
     listCatalog("area", projectId),
-    listCatalog("iteration", projectId),
+    listCatalog("size", projectId),
     db
       .select({ userId: projectMembers.userId, name: user.name, image: user.image, email: user.email })
       .from(projectMembers)
@@ -430,9 +432,9 @@ async function getFieldsDetail(projectId: number, workItemId: number, role: Proj
 
   return {
     catalogAreas,
-    catalogIterations,
+    catalogSizes,
     itemArea: row.areaName,
-    itemIteration: row.iterationName,
+    itemSize: row.sizeName,
     stage: { name: row.stageName, isClosing: row.isClosing },
     hasClosingStage: closing !== undefined,
     assignee:
@@ -498,7 +500,7 @@ export async function getWorkItemDetailData(
       throw new AppError(discussionResult.error.code, discussionResult.error.message);
 
     return {
-      catalogTags: catalogResult.data.map((t) => t.name),
+      catalogTags: catalogResult.data.map((t) => ({ name: t.name, color: t.color })),
       itemTags: itemTagsResult.data.map((t) => t.name),
       activity: activityResult.data,
       relations: relationsResult.data,

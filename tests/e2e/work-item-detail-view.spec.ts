@@ -8,6 +8,7 @@ import {
   backToBoard,
   addColumn,
   addWorkItem,
+  createFromField,
 } from "./helpers";
 
 test.describe("Work Item Detail View", () => {
@@ -41,7 +42,7 @@ test.describe("Work Item Detail View", () => {
     await openCard(page, "Design login");
     await page.getByLabel("Description", { exact: true }).fill("Match the new brand colors.");
     await page.getByPlaceholder("Add a tag...").fill("urgent");
-    await page.getByRole("button", { name: 'Create "urgent"' }).click();
+    await createFromField(page, "urgent");
     await page.getByRole("button", { name: "Save" }).click();
     // Wait for the save's round-trip (button re-enabled) *and* for the
     // background router.refresh() it triggers to settle, or reloading can

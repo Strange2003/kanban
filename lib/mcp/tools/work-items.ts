@@ -45,7 +45,7 @@ const fieldShape = {
   priority: level,
   severity: level,
   area: z.string().nullable().optional().describe("Area name; created in the project if new; null clears it."),
-  iteration: z.string().nullable().optional().describe("Iteration name; created if new; null clears it."),
+  size: z.string().nullable().optional().describe("Size name (e.g. S, M, L); created if new; null clears it."),
   startDate: calendarDate,
   targetDate: calendarDate,
 };
@@ -61,7 +61,7 @@ function toActionFields(input: FieldInput): WorkItemFieldsInput {
     priority: input.priority,
     severity: input.severity,
     areaName: input.area,
-    iterationName: input.iteration,
+    sizeName: input.size,
     startDate: input.startDate,
     targetDate: input.targetDate,
   };

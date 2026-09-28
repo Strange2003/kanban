@@ -2,11 +2,11 @@
 
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { workItems, stages, areas, iterations, tags, workItemTags, projectMembers } from "@/db/schema";
+import { workItems, stages, areas, sizes, tags, workItemTags, projectMembers } from "@/db/schema";
 import { user } from "@/db/auth-schema";
 import { requireProjectMember } from "@/lib/permissions";
 import { runAction, type Result } from "@/lib/errors";
-import { listCatalog } from "@/lib/work-item-catalogs";
+import { listCatalog, listTagCatalog } from "@/lib/work-item-catalogs";
 import type { ProjectRole } from "@/lib/roles";
 import type { WorkItemViewOptions, WorkItemViewRow } from "@/lib/work-item-view";
 
@@ -39,14 +39,14 @@ export async function getWorkItemsView(projectPublicId: string): Promise<Result<
         stagePosition: stages.position,
         isClosed: stages.isClosing,
         areaName: areas.name,
-        iterationName: iterations.name,
+        sizeName: sizes.name,
         assigneeName: user.name,
         assigneeImage: user.image,
       })
       .from(workItems)
       .innerJoin(stages, eq(stages.id, workItems.stageId))
       .leftJoin(areas, eq(areas.id, workItems.areaId))
-      .leftJoin(iterations, eq(iterations.id, workItems.iterationId))
+      .leftJoin(sizes, eq(sizes.id, workItems.sizeId))
       .leftJoin(user, eq(user.id, workItems.assigneeUserId))
       .where(eq(workItems.projectId, project.id))
       .orderBy(asc(workItems.displayNumber));
@@ -67,14 +67,11 @@ export async function getWorkItemsView(projectPublicId: string): Promise<Result<
       .where(eq(stages.projectId, project.id))
       .orderBy(asc(stages.position));
 
-    const [catalogAreas, catalogIterations, catalogTags, memberRows] = await Promise.all([
+    const [catalogAreas, catalogSizes, catalogTags, memberRows] = await Promise.all([
       listCatalog("area", project.id),
-      listCatalog("iteration", project.id),
-      db
-        .select({ name: tags.name })
-        .from(tags)
-        .where(eq(tags.projectId, project.id))
-        .orderBy(asc(tags.name)),
+      listCatalog("size", project.id),
+      // Manual catalog order, with colors (FR-017/FR-019 of 013-project-catalogs).
+      listTagCatalog(project.id),
       db
         .select({ userId: projectMembers.userId, name: user.name, image: user.image })
         .from(projectMembers)
@@ -96,7 +93,7 @@ export async function getWorkItemsView(projectPublicId: string): Promise<Result<
       priority: item.priority,
       severity: item.severity,
       areaName: joined.areaName,
-      iterationName: joined.iterationName,
+      sizeName: joined.sizeName,
       tags: (tagsByItem.get(item.id) ?? []).sort((a, b) => a.localeCompare(b)),
       assignee:
         item.assigneeUserId !== null
@@ -113,8 +110,8 @@ export async function getWorkItemsView(projectPublicId: string): Promise<Result<
       options: {
         stages: stageRows,
         areas: catalogAreas,
-        iterations: catalogIterations,
-        tags: catalogTags.map((t) => t.name),
+        sizes: catalogSizes,
+        tags: catalogTags,
         members: memberRows,
       },
       role: membership.role,

@@ -19,6 +19,8 @@ import { LocalDate } from "@/components/ui/local-date";
 import { Button } from "@/components/ui/button";
 import { ViewFilters } from "@/components/views/ViewFilters";
 import { Avatar } from "@/components/ui/avatar";
+import { TagChip } from "@/components/ui/tag-chip";
+import { DEFAULT_TAG_COLOR } from "@/lib/tag-colors";
 import { useViewQuery } from "@/components/views/useViewQuery";
 import { cn } from "@/lib/utils";
 
@@ -31,7 +33,7 @@ const COLUMNS: { label: string; sort: SortKey | null; className?: string }[] = [
   { label: "Priority", sort: "priority" },
   { label: "Severity", sort: "severity" },
   { label: "Area", sort: "area" },
-  { label: "Iteration", sort: "iteration" },
+  { label: "Size", sort: "size" },
   { label: "Tags", sort: null },
   { label: "Assignee", sort: "assignee" },
   { label: "Start date", sort: "startDate" },
@@ -62,10 +64,16 @@ export function WorkItemsTable({
   const today = useLocalToday();
 
   const visible = useMemo(
-    () => sortWorkItems(filterWorkItems(rows, query, today, currentUserId), query.sort, query.dir),
-    [rows, query, today, currentUserId],
+    // Area and Size follow the catalogs' manual order (FR-017 of 013-project-catalogs).
+    () =>
+      sortWorkItems(filterWorkItems(rows, query, today, currentUserId), query.sort, query.dir, {
+        areas: options.areas,
+        sizes: options.sizes,
+      }),
+    [rows, query, today, currentUserId, options.areas, options.sizes],
   );
   const waitingForToday = query.overdue && today === null;
+  const tagColors = useMemo(() => new Map(options.tags.map((t) => [t.name, t.color])), [options.tags]);
 
   function sortBy(key: SortKey) {
     // First click ascending, second descending; a new column starts ascending.
@@ -160,14 +168,12 @@ export function WorkItemsTable({
                   <td className="px-3 py-2">{row.priority ? <PriorityBadge level={row.priority} /> : <Empty />}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{row.severity ? LEVEL_LABELS[row.severity] : <Empty />}</td>
                   <td className="px-3 py-2">{row.areaName ?? <Empty />}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{row.iterationName ?? <Empty />}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{row.sizeName ?? <Empty />}</td>
                   <td className="px-3 py-2">
                     {row.tags.length ? (
                       <span className="flex flex-wrap gap-1">
                         {row.tags.map((tag) => (
-                          <span key={tag} className="rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground">
-                            {tag}
-                          </span>
+                          <TagChip key={tag} name={tag} color={tagColors.get(tag) ?? DEFAULT_TAG_COLOR} />
                         ))}
                       </span>
                     ) : (

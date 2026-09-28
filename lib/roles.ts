@@ -23,7 +23,8 @@ export type Permission =
   | "board:edit"
   | "workItem:edit"
   | "workItem:comment"
-  | "relationship:edit";
+  | "relationship:edit"
+  | "catalog:manage";
 
 // One key per row of the spec's matrix (contracts/roles-permissions.md § Matriz
 // de permisos → claves). Reads need no key: every member, viewers included,
@@ -44,6 +45,10 @@ const PERMISSIONS: Record<Permission, readonly ProjectRole[]> = {
   "workItem:edit": ["owner", "member"],
   "workItem:comment": ["owner", "member", "viewer"],
   "relationship:edit": ["owner", "member"],
+  // FR-007 of 013-project-catalogs: create, rename, recolor, reorder and delete
+  // a project's tags, areas and sizes. Assigning them to a Work Item is still
+  // `workItem:edit`.
+  "catalog:manage": ["owner", "member"],
 };
 
 export const ROLE_LABELS: Record<ProjectRole, string> = {

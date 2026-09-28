@@ -44,7 +44,7 @@ export default async function PrivacyPage() {
         </li>
         <li>
           <strong>What you create:</strong> projects, board columns, Work Items and all their fields, tags, areas,
-          iterations and the links between Work Items.
+          sizes and the links between Work Items.
         </li>
         <li>
           <strong>Collaboration:</strong> which projects you belong to and with which role, the invitations you

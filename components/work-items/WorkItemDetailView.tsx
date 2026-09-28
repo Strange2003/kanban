@@ -70,6 +70,8 @@ export function WorkItemDetailView({
   const canEdit = can(initialDetail.role, "workItem:edit");
   const canComment = can(initialDetail.role, "workItem:comment");
   const canEditRelations = can(initialDetail.role, "relationship:edit");
+  // 013-project-catalogs FR-014: "Create new" in the Tags/Area/Size fields.
+  const canManageCatalogs = can(initialDetail.role, "catalog:manage");
   const [title, setTitle] = useState(workItem.title);
   const [description, setDescription] = useState(workItem.description ?? "");
   // 011-agent-access-mcp FR-004 (replaces the free-text stakeholder).
@@ -78,7 +80,7 @@ export function WorkItemDetailView({
   const [priority, setPriority] = useState<WorkItemLevel | null>(workItem.priority);
   const [severity, setSeverity] = useState<WorkItemLevel | null>(workItem.severity);
   const [area, setArea] = useState(initialDetail.itemArea);
-  const [iteration, setIteration] = useState(initialDetail.itemIteration);
+  const [size, setSize] = useState(initialDetail.itemSize);
   const [startDate, setStartDate] = useState(workItem.startDate ?? "");
   const [targetDate, setTargetDate] = useState(workItem.targetDate ?? "");
   const [estimateHours, setEstimateHours] = useState(minutesToHoursInput(workItem.estimateMinutes));
@@ -93,12 +95,24 @@ export function WorkItemDetailView({
     priority: workItem.priority,
     severity: workItem.severity,
     area: initialDetail.itemArea,
-    iteration: initialDetail.itemIteration,
+    size: initialDetail.itemSize,
     startDate: workItem.startDate ?? "",
     targetDate: workItem.targetDate ?? "",
     estimateHours: minutesToHoursInput(workItem.estimateMinutes),
   }));
   const [catalogTags, setCatalogTags] = useState(initialDetail.catalogTags);
+  // Local copies so a value created in the "Create new" pop-up is offered at once.
+  const [catalogAreas, setCatalogAreas] = useState(initialDetail.catalogAreas);
+  const [catalogSizes, setCatalogSizes] = useState(initialDetail.catalogSizes);
+  // The server's catalogs are the source of truth: after a router.refresh()
+  // (e.g. someone deleted a value, CATALOG_VALUE_NOT_FOUND) take them as they are.
+  const [prevCatalogs, setPrevCatalogs] = useState(initialDetail);
+  if (initialDetail !== prevCatalogs) {
+    setPrevCatalogs(initialDetail);
+    setCatalogTags(initialDetail.catalogTags);
+    setCatalogAreas(initialDetail.catalogAreas);
+    setCatalogSizes(initialDetail.catalogSizes);
+  }
   const [activity, setActivity] = useState<ActivityEntry[]>(initialDetail.activity);
   const [comments, setComments] = useState<WorkItemCommentView[]>(initialDetail.discussion.comments);
   const [timeEntries, setTimeEntries] = useState<WorkItemTimeEntryView[]>(initialDetail.discussion.timeEntries);
@@ -129,7 +143,7 @@ export function WorkItemDetailView({
     priority,
     severity,
     area,
-    iteration,
+    size,
     startDate,
     targetDate,
     estimateHours,
@@ -222,7 +236,7 @@ export function WorkItemDetailView({
     setPriority(workItem.priority);
     setSeverity(workItem.severity);
     setArea(initialDetail.itemArea);
-    setIteration(initialDetail.itemIteration);
+    setSize(initialDetail.itemSize);
     setStartDate(workItem.startDate ?? "");
     setTargetDate(workItem.targetDate ?? "");
     setEstimateHours(minutesToHoursInput(workItem.estimateMinutes));
@@ -235,12 +249,14 @@ export function WorkItemDetailView({
       priority: workItem.priority,
       severity: workItem.severity,
       area: initialDetail.itemArea,
-      iteration: initialDetail.itemIteration,
+      size: initialDetail.itemSize,
       startDate: workItem.startDate ?? "",
       targetDate: workItem.targetDate ?? "",
       estimateHours: minutesToHoursInput(workItem.estimateMinutes),
     });
     setCatalogTags(initialDetail.catalogTags);
+    setCatalogAreas(initialDetail.catalogAreas);
+    setCatalogSizes(initialDetail.catalogSizes);
     setActivity(initialDetail.activity);
     setComments(initialDetail.discussion.comments);
     setTimeEntries(initialDetail.discussion.timeEntries);
@@ -340,16 +356,24 @@ export function WorkItemDetailView({
       priority,
       severity,
       areaName: area,
-      iterationName: iteration,
+      sizeName: size,
       startDate: startDate || null,
       targetDate: targetDate || null,
       estimateMinutes,
+      // New values are created in the "Create new" pop-up before saving, so an
+      // unknown name here means someone deleted it meanwhile: don't bring it
+      // back silently (013-project-catalogs research.md).
+      createMissingCatalogValues: false,
     });
     setSubmitting(false);
 
     if (!result.ok) {
       setError(result.error.message);
       if (isRolePermissionError(result)) router.refresh();
+      if (result.error.code === "CATALOG_VALUE_NOT_FOUND") {
+        // Reload the catalogs; the deleted value stays selected so the user sees what to change.
+        router.refresh();
+      }
       return;
     }
     setSavedFields(submittedFields);
@@ -540,7 +564,15 @@ export function WorkItemDetailView({
                 </div>
                 <div className="space-y-1.5">
                   <Label>Tags</Label>
-                  <TagPicker catalog={catalogTags} selected={selectedTags} onChange={setSelectedTags} disabled={!canEdit} />
+                  <TagPicker
+                    projectPublicId={projectPublicId}
+                    catalog={catalogTags}
+                    selected={selectedTags}
+                    onChange={setSelectedTags}
+                    onCatalogAdd={(tag) => setCatalogTags((current) => [...current, tag])}
+                    canCreate={canManageCatalogs}
+                    disabled={!canEdit}
+                  />
                 </div>
               </section>
 
@@ -563,11 +595,33 @@ export function WorkItemDetailView({
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="wi-area">Area</Label>
-                  <CatalogPicker id="wi-area" label="Area" catalog={initialDetail.catalogAreas} value={area} onChange={setArea} disabled={!canEdit} />
+                  <CatalogPicker
+                    id="wi-area"
+                    label="Area"
+                    kind="area"
+                    projectPublicId={projectPublicId}
+                    catalog={catalogAreas}
+                    value={area}
+                    onChange={setArea}
+                    onCatalogAdd={(name) => setCatalogAreas((current) => [...current, name])}
+                    canCreate={canManageCatalogs}
+                    disabled={!canEdit}
+                  />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="wi-iteration">Iteration</Label>
-                  <CatalogPicker id="wi-iteration" label="Iteration" catalog={initialDetail.catalogIterations} value={iteration} onChange={setIteration} disabled={!canEdit} />
+                  <Label htmlFor="wi-size">Size</Label>
+                  <CatalogPicker
+                    id="wi-size"
+                    label="Size"
+                    kind="size"
+                    projectPublicId={projectPublicId}
+                    catalog={catalogSizes}
+                    value={size}
+                    onChange={setSize}
+                    onCatalogAdd={(name) => setCatalogSizes((current) => [...current, name])}
+                    canCreate={canManageCatalogs}
+                    disabled={!canEdit}
+                  />
                 </div>
               </fieldset>
 

@@ -3,13 +3,18 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronRight, Plus, Search, X } from "lucide-react";
+import { ChevronRight, Plus, Search, Tag, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CreateProjectDialog } from "@/components/sidebar/CreateProjectDialog";
 import { EmptyProjectsState } from "@/components/sidebar/EmptyProjectsState";
 import { listMyProjects, type ProjectWithMemberCount } from "@/lib/actions/projects";
+
+// FR-002 of 013-project-catalogs: pages nested under the ACTIVE project (the
+// one in the URL), so the sidebar doesn't repeat them under every project
+// (research.md § Opción anidada en el sidebar). Add future entries here.
+const PROJECT_LINKS = [{ label: "Tags", path: "/settings/catalogs", icon: Tag }] as const;
 
 function CollapsibleSection({
   title,
@@ -57,6 +62,29 @@ function CollapsibleSection({
                 >
                   {project.name}
                 </Link>
+                {selected && (
+                  <ul aria-label={`${project.name} pages`}>
+                    {PROJECT_LINKS.map(({ label, path, icon: Icon }) => {
+                      const linkHref = `${href}${path}`;
+                      const current = pathname === linkHref;
+                      return (
+                        <li key={path}>
+                          <Link
+                            href={linkHref}
+                            aria-current={current ? "page" : undefined}
+                            className={cn(
+                              "mt-0.5 ml-4 flex items-center gap-2 rounded-md px-4 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                              current && "bg-accent/60 font-medium text-accent-foreground",
+                            )}
+                          >
+                            <Icon className="h-3.5 w-3.5" aria-hidden />
+                            {label}
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
               </li>
             );
           })}

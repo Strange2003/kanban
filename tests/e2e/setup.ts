@@ -27,7 +27,7 @@ export default async function globalSetup() {
       tags,
       work_items,
       areas,
-      iterations,
+      sizes,
       stages,
       notifications,
       invitations,
