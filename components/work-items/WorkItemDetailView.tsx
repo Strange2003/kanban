@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Clock3, History, MessageSquare, Link2 } from "lucide-react";
@@ -35,6 +35,10 @@ import {
   type WorkItemTimeEntryView,
 } from "@/lib/actions/work-item-discussion";
 import { formatMinutes, hoursToMinutes, minutesToHoursInput } from "@/lib/work-item-time";
+import { rememberedBoardHref } from "@/lib/board-query-storage";
+
+// The remembered board filters only change on the board itself, never while this view is open.
+const noSubscription = () => () => {};
 
 type ActivityEntry = WorkItemActivityEntryView;
 
@@ -63,6 +67,13 @@ export function WorkItemDetailView({
   initialDetail: WorkItemDetailData;
 }) {
   const router = useRouter();
+  // 014-board-filters-mcp-catalogs (US2): back to the board with this tab's
+  // filters. The server snapshot is the clean address, so hydration agrees.
+  const boardHref = useSyncExternalStore(
+    noSubscription,
+    () => rememberedBoardHref(projectPublicId),
+    () => `/projects/${projectPublicId}`,
+  );
   const { toast } = useToast();
   // 007-roles-permissions: derived from the role the server just read, so a
   // router.refresh() after a rejected action flips this screen to read-only.
@@ -454,7 +465,7 @@ export function WorkItemDetailView({
       if (isRolePermissionError(result)) router.refresh();
       return;
     }
-    router.push(`/projects/${projectPublicId}`);
+    router.push(rememberedBoardHref(projectPublicId));
   }
 
   const { parent, children, related } = relations;
@@ -470,7 +481,7 @@ export function WorkItemDetailView({
         <header className="sticky top-0 z-20 border-b border-border bg-background/95 px-4 pt-4 backdrop-blur sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
             <Link
-              href={"/projects/" + projectPublicId}
+              href={boardHref}
               className="text-muted-foreground rounded text-sm hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
               ← Back to board

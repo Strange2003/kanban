@@ -6,6 +6,7 @@ import { Settings } from "lucide-react";
 import { ReadOnlyNotice } from "@/components/ui/read-only-notice";
 import { can, type ProjectRole } from "@/lib/roles";
 import { cn } from "@/lib/utils";
+import { BOARD_QUERY_KEYS } from "@/lib/work-item-view";
 
 type View = "board" | "list" | "table";
 
@@ -27,10 +28,16 @@ export function ProjectViewHeader({
   const base = `/projects/${projectPublicId}`;
 
   // Switching between List and Table keeps the filters; the List has no sort.
-  // The board has no filters, so its link is always clean.
+  // The board only has the assignee and tag filters: they travel both ways,
+  // and List/Table's other filters stay behind (FR-010 of 014-board-filters-mcp-catalogs).
   function hrefFor(view: View): string {
-    if (view === "board") return base;
-    const params = new URLSearchParams(active === "board" ? "" : searchParams.toString());
+    if (view === "board") {
+      const params = new URLSearchParams();
+      for (const key of BOARD_QUERY_KEYS) searchParams.getAll(key).forEach((value) => params.append(key, value));
+      const qs = params.toString();
+      return qs ? `${base}?${qs}` : base;
+    }
+    const params = new URLSearchParams(searchParams.toString());
     if (view === "list") {
       params.delete("sort");
       params.delete("dir");

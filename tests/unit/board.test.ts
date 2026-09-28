@@ -53,7 +53,7 @@ vi.mock("@/db/client", async () => {
   return { db };
 });
 
-import { setStageClosing } from "@/lib/actions/board";
+import { getBoard, setStageClosing } from "@/lib/actions/board";
 
 const P = "proj-1";
 const doneStage = { id: 2, publicId: "stage-2", projectId: 1, name: "Done", position: 1, isClosing: false };
@@ -113,5 +113,27 @@ describe("setStageClosing", () => {
     expect(fake.writes.find((w) => w.table === "work_item_activity")?.values).toEqual([
       { workItemId: 10, type: "reopened", actorUserId: "u1", agentClientId: null, agentName: null, payload: { stageName: "Done", via: "stage_unmarked" } },
     ]);
+  });
+});
+
+// 014-board-filters-mcp-catalogs FR-002/FR-003: the board's filters read the
+// viewer, the current members and the tag catalog from getBoard.
+describe("getBoard filter options", () => {
+  it("returns the viewer, the members and the tag catalog with colors", async () => {
+    fake.rows.project_members = [{ projectId: 1, userId: "u1", role: "member", name: "Alice", image: null }];
+    fake.rows.stages = [{ stage: doneStage, workItemCount: 0 }];
+    fake.rows.tags = [
+      { name: "UI", color: "pink" },
+      { name: "Bug", color: "red" },
+    ];
+
+    const result = await getBoard(P);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.currentUserId).toBe("u1");
+    expect(result.data.members).toEqual([{ projectId: 1, userId: "u1", role: "member", name: "Alice", image: null }]);
+    // Kept in the order the catalog query returns (position, id) — never re-sorted by name.
+    expect(result.data.tagCatalog.map((t) => t.name)).toEqual(["UI", "Bug"]);
   });
 });

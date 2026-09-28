@@ -119,6 +119,9 @@ export function StageColumn({
   onToggleClosing,
   onMoveWorkItem,
   onReorderWorkItem,
+  totalCount = workItems.length,
+  filtersActive = false,
+  isHiddenByFilters,
 }: {
   projectPublicId: string;
   // False for a Viewer (007-roles-permissions): no dragging, renaming,
@@ -131,6 +134,11 @@ export function StageColumn({
   onToggleClosing: (stage: StageWithCount) => void;
   onMoveWorkItem: (workItemId: number, stageId: number) => void;
   onReorderWorkItem: (workItemId: number, stageId: number, direction: -1 | 1) => void;
+  // 014-board-filters-mcp-catalogs: `workItems` are only the cards the board's
+  // filters let through; `totalCount` is every Work Item in the column (FR-005, FR-006).
+  totalCount?: number;
+  filtersActive?: boolean;
+  isHiddenByFilters?: (item: { assigneeUserId: null; tagNames: string[] }) => boolean;
 }) {
   // One sortable registration per stage serves double duty: it's both the
   // reorder-columns drag source/target (FR-005 of 003) and the drop target
@@ -184,7 +192,19 @@ export function StageColumn({
           )}
         </div>
         <div className="flex items-center gap-1">
-          <span className="text-muted-foreground text-xs">{workItems.length}</span>
+          {filtersActive ? (
+            <span
+              className="text-muted-foreground text-xs"
+              aria-label={`${workItems.length} of ${totalCount} Work Items shown`}
+              data-testid="stage-count"
+            >
+              {workItems.length}/{totalCount}
+            </span>
+          ) : (
+            <span className="text-muted-foreground text-xs" data-testid="stage-count">
+              {workItems.length}
+            </span>
+          )}
           {canEdit && (
             <ClosingStageToggle
               isClosing={stage.isClosing}
@@ -208,7 +228,7 @@ export function StageColumn({
             <DeleteStageButton
               projectPublicId={projectPublicId}
               stagePublicId={stage.publicId}
-              hasWorkItems={workItems.length > 0}
+              hasWorkItems={totalCount > 0}
             />
           )}
         </div>
@@ -235,10 +255,15 @@ export function StageColumn({
             />
           ))}
         </SortableContext>
+        {workItems.length === 0 && totalCount > 0 && (
+          <p className="text-muted-foreground px-1 py-2 text-center text-xs" data-testid="hidden-by-filters">
+            Hidden by filters
+          </p>
+        )}
       </div>
       {canEdit && (
         <div className="flex shrink-0 flex-col px-2 pb-2">
-          <AddWorkItemButton stagePublicId={stage.publicId} />
+          <AddWorkItemButton stagePublicId={stage.publicId} isHiddenByFilters={isHiddenByFilters} />
         </div>
       )}
     </div>

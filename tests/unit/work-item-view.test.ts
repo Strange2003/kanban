@@ -4,6 +4,7 @@ import {
   buildWorkItemTree,
   filterWorkItems,
   hasActiveFilters,
+  matchesAssigneeAndTags,
   parseViewQuery,
   serializeViewQuery,
   sortWorkItems,
@@ -319,5 +320,52 @@ describe("assignee filter and sort (011-agent-access-mcp FR-008)", () => {
     expect(numbers(sortWorkItems(sized, "size", "desc", catalogs))).toEqual([1, 4, 5, 3, 2]);
     // Without a catalog, alphabetical as before.
     expect(numbers(sortWorkItems(sized, "size", "asc"))).toEqual([4, 5, 3, 1, 2]);
+  });
+});
+
+// 014-board-filters-mcp-catalogs: the board reuses the List/Table rules (FR-004).
+describe("matchesAssigneeAndTags and the board query (014 FR-004, FR-010)", () => {
+  const item = (assigneeUserId: string | null, tagNames: string[] = []) => ({ assigneeUserId, tagNames });
+  const f = (assignees: string[], tags: string[]) => ({ assignees, tags });
+
+  it.each([
+    ["no filters", item(null), f([], []), "u1", true],
+    ["two assignees → OR", item("u2"), f(["u1", "u2"], []), "u1", true],
+    ["assignee miss", item("u3"), f(["u1", "u2"], []), "u1", false],
+    ["assignee AND tag", item("u1", ["UI"]), f(["u1"], ["Bug"]), "u1", false],
+    ["assignee AND tag, both match", item("u1", ["Bug"]), f(["u1"], ["Bug"]), "u1", true],
+    ["two tags → OR", item(null, ["UI"]), f([], ["Bug", "UI"]), null, true],
+    ["tags ignore case", item(null, ["UI"]), f([], ["ui"]), null, true],
+    ["me with the viewer", item("u1"), f(["me"], []), "u1", true],
+    ["me without a viewer", item("u1"), f(["me"], []), null, false],
+    ["none = unassigned", item(null), f(["none"], []), null, true],
+    ["none ≠ assigned", item("u1"), f(["none"], []), null, false],
+    ["none = no tags", item(null, []), f([], ["none"]), null, true],
+    ["none ≠ tagged", item(null, ["UI"]), f([], ["none"]), null, false],
+    ["none OR a tag", item(null, ["UI"]), f([], ["none", "UI"]), null, true],
+  ] as const)("%s", (_label, it_, query, me, expected) => {
+    expect(matchesAssigneeAndTags({ ...it_, tagNames: [...it_.tagNames] }, { assignees: [...query.assignees], tags: [...query.tags] }, me)).toBe(expected);
+  });
+
+  it("filterWorkItems agrees with the shared predicate for assignee and tags", () => {
+    const alice = { userId: "u1", name: "Alice", image: null };
+    const rows = [
+      row({ displayNumber: 1, assignee: alice, tags: ["Bug"] }),
+      row({ displayNumber: 2, tags: ["UI"] }),
+      row({ displayNumber: 3, assignee: alice }),
+      row({ displayNumber: 4 }),
+    ];
+    for (const query of [f(["me"], []), f([], ["bug", "none"]), f(["none"], ["UI"]), f(["u1"], ["Bug"])]) {
+      const expected = rows
+        .filter((r) => matchesAssigneeAndTags({ assigneeUserId: r.assignee?.userId ?? null, tagNames: r.tags }, query, "u1"))
+        .map((r) => r.displayNumber);
+      expect(numbers(filterWorkItems(rows, q(query), "2026-09-28", "u1"))).toEqual(expected);
+    }
+  });
+
+  it("serializes only the assignee and tag filters for the board", () => {
+    const query = q({ assignees: ["me", "u2"], tags: ["UI"], priorities: ["high"], status: "open", q: "x", sort: "title" });
+    expect(serializeViewQuery(query, "board")).toBe("assignee=me&assignee=u2&tag=UI");
+    expect(serializeViewQuery(q(), "board")).toBe("");
   });
 });

@@ -4,10 +4,11 @@ import { revalidatePath } from "next/cache";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
-import { stages, tags, workItems, workItemTags } from "@/db/schema";
+import { projectMembers, stages, tags, workItems, workItemTags } from "@/db/schema";
 import { logActivity } from "@/lib/activity";
 import { requireProjectMember, requireProjectPermission } from "@/lib/permissions";
 import { generatePublicId } from "@/lib/ids";
+import { listTagCatalog } from "@/lib/work-item-catalogs";
 import { AppError, runAction, type Result } from "@/lib/errors";
 import type { WorkItemWithDisplayId } from "@/lib/actions/work-items";
 import type { AssigneeView } from "@/lib/work-item-view";
@@ -31,9 +32,22 @@ export type StageWithCount = typeof stages.$inferSelect & { workItemCount: numbe
 // for a Viewer; reading the board itself only needs membership.
 export async function getBoard(
   projectPublicId: string,
-): Promise<Result<{ stages: StageWithCount[]; workItems: BoardWorkItem[]; role: ProjectRole; projectName: string }>> {
+): Promise<
+  Result<{
+    stages: StageWithCount[];
+    workItems: BoardWorkItem[];
+    role: ProjectRole;
+    projectName: string;
+    // 014-board-filters-mcp-catalogs: what the board's Assignee and Tags filters
+    // need — the viewer ("Assigned to me"), the current members and the tag
+    // catalog in its manual order, with colors (FR-002, FR-003).
+    currentUserId: string;
+    members: AssigneeView[];
+    tagCatalog: { name: string; color: TagColor }[];
+  }>
+> {
   return runAction(async () => {
-    const { project, membership } = await requireProjectMember(projectPublicId);
+    const { actor, project, membership } = await requireProjectMember(projectPublicId);
 
     const stageRows = await db
       .select({
@@ -66,6 +80,16 @@ export async function getBoard(
       tagsByItem.set(workItemId, [...(tagsByItem.get(workItemId) ?? []), { name, color }]);
     }
 
+    const [members, tagCatalog] = await Promise.all([
+      db
+        .select({ userId: projectMembers.userId, name: user.name, image: user.image })
+        .from(projectMembers)
+        .innerJoin(user, eq(user.id, projectMembers.userId))
+        .where(eq(projectMembers.projectId, project.id))
+        .orderBy(asc(user.name)),
+      listTagCatalog(project.id),
+    ]);
+
     return {
       stages: stageRows.map((r) => ({ ...r.stage, workItemCount: r.workItemCount })),
       workItems: workItemRows.map(({ workItem: wi, assigneeName, assigneeImage }) => ({
@@ -79,6 +103,9 @@ export async function getBoard(
       })),
       role: membership.role,
       projectName: project.name,
+      currentUserId: actor.userId,
+      members,
+      tagCatalog,
     };
   });
 }

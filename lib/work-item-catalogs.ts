@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { areas, sizes, tags, workItems, workItemTags } from "@/db/schema";
 import { DEFAULT_TAG_COLOR, type TagColor } from "@/lib/tag-colors";
@@ -35,6 +35,30 @@ export async function listTagCatalog(projectId: number): Promise<{ name: string;
     .from(tags)
     .where(eq(tags.projectId, projectId))
     .orderBy(asc(tags.position), asc(tags.id));
+}
+
+/**
+ * The tags of some of a project's Work Items, with their colors, by Work Item
+ * id — one query for all of them, alphabetical per Work Item like the board.
+ * Scoped by `projectId`, so ids from another project return nothing (FR-017 of
+ * 014-board-filters-mcp-catalogs: what an agent's write actually stored).
+ */
+export async function listWorkItemTags(
+  projectId: number,
+  workItemIds: number[],
+): Promise<Map<number, { name: string; color: TagColor }[]>> {
+  const byItem = new Map<number, { name: string; color: TagColor }[]>();
+  if (workItemIds.length === 0) return byItem;
+  const rows = await db
+    .select({ workItemId: workItemTags.workItemId, name: tags.name, color: tags.color })
+    .from(workItemTags)
+    .innerJoin(tags, eq(tags.id, workItemTags.tagId))
+    .where(and(eq(tags.projectId, projectId), inArray(workItemTags.workItemId, workItemIds)))
+    .orderBy(asc(tags.name));
+  for (const { workItemId, name, color } of rows) {
+    byItem.set(workItemId, [...(byItem.get(workItemId) ?? []), { name, color }]);
+  }
+  return byItem;
 }
 
 /** How many Work Items use each value of a catalog, keyed by the value's internal id. */

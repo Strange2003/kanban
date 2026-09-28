@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -28,17 +28,31 @@ import { can, type ProjectRole } from "@/lib/roles";
 import { AddStageButton } from "@/components/board/AddStageButton";
 import { useToast } from "@/components/ui/toast";
 import { nextClosedAt } from "@/lib/work-item-closing";
+import { BoardFilters } from "@/components/board/BoardFilters";
+import { useViewQuery } from "@/components/views/useViewQuery";
+import { matchesAssigneeAndTags, serializeViewQuery, type WorkItemViewOptions } from "@/lib/work-item-view";
+import { boardQueryStorageKey } from "@/lib/board-query-storage";
+
+// The board has no column filter, so no column id is ever "valid" in its query.
+const NO_STAGES: ReadonlySet<string> = new Set();
 
 export function Board({
   projectPublicId,
   role,
   initialStages,
   initialWorkItems,
+  currentUserId,
+  members,
+  tagCatalog,
 }: {
   projectPublicId: string;
   role: ProjectRole;
   initialStages: StageWithCount[];
   initialWorkItems: BoardWorkItem[];
+  // 014-board-filters-mcp-catalogs: the Assignee and Tags filters' options.
+  currentUserId: string;
+  members: WorkItemViewOptions["members"];
+  tagCatalog: WorkItemViewOptions["tags"];
 }) {
   const { toast } = useToast();
   const router = useRouter();
@@ -66,6 +80,42 @@ export function Board({
     setPrevInitialWorkItems(initialWorkItems);
     setWorkItemsState(initialWorkItems);
   }
+
+  // 014-board-filters-mcp-catalogs: the filters live in the address, like
+  // List/Table's (FR-009), and only hide cards — every column stays (FR-005).
+  const [query, setQuery] = useViewQuery("board", NO_STAGES);
+  const filtersActive = query.assignees.length > 0 || query.tags.length > 0;
+  const isVisible = (item: { assigneeUserId: string | null; tagNames: string[] }) =>
+    matchesAssigneeAndTags(item, query, currentUserId);
+  const visibleIds = useMemo(
+    () =>
+      new Set(
+        workItemsState
+          .filter((wi) =>
+            matchesAssigneeAndTags(
+              { assigneeUserId: wi.assignee?.userId ?? null, tagNames: wi.tags.map((t) => t.name) },
+              query,
+              currentUserId,
+            ),
+          )
+          .map((wi) => wi.id),
+      ),
+    [workItemsState, query, currentUserId],
+  );
+
+  // Remember this tab's board filters so the detail view's "Back to board"
+  // returns to them (research.md § Volver del detalle al tablero). Storage can
+  // be unavailable (private mode, blocked site data): the link is then clean.
+  const boardQueryString = serializeViewQuery(query, "board");
+  useEffect(() => {
+    try {
+      const key = boardQueryStorageKey(projectPublicId);
+      if (boardQueryString) window.sessionStorage.setItem(key, boardQueryString);
+      else window.sessionStorage.removeItem(key);
+    } catch {
+      // Ignore: remembering the filters is only a convenience.
+    }
+  }, [projectPublicId, boardQueryString]);
 
   // A small activation distance lets a plain click (opening a Work Item's
   // detail panel, or a column's delete button) fire normally, while a real
@@ -203,9 +253,13 @@ export function Board({
     }
   }
 
+  // FR-013 of 014-board-filters-mcp-catalogs: step to the neighbouring VISIBLE
+  // card — swapping with a hidden one would change nothing the user can see.
+  // handleWorkItemReorder then moves it within the full column, so hidden
+  // cards keep their relative order (FR-012).
   function reorderWorkItemByStep(workItemId: number, stageId: number, direction: -1 | 1) {
     const siblings = workItemsState
-      .filter((wi) => wi.stageId === stageId)
+      .filter((wi) => wi.stageId === stageId && visibleIds.has(wi.id))
       .sort((a, b) => a.position - b.position);
     const index = siblings.findIndex((wi) => wi.id === workItemId);
     const target = siblings[index + direction];
@@ -277,6 +331,19 @@ export function Board({
       onDragCancel={() => setDraggedWorkItemId(null)}
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <BoardFilters query={query} onChange={setQuery} members={members} tagCatalog={tagCatalog} />
+        {filtersActive && visibleIds.size === 0 && (
+          <p className="text-muted-foreground px-4 pt-2 text-sm" role="status" data-testid="board-no-matches">
+            No Work Items match the filters.{" "}
+            <button
+              type="button"
+              className="rounded underline hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              onClick={() => setQuery({ ...query, assignees: [], tags: [] })}
+            >
+              Clear filters
+            </button>
+          </p>
+        )}
         {stagesState.length > 1 && (
           <p className="px-4 pt-2 text-xs text-muted-foreground md:hidden">
             Swipe sideways to see all {stagesState.length} columns.
@@ -300,8 +367,11 @@ export function Board({
                 }
                 onReorderWorkItem={reorderWorkItemByStep}
                 workItems={workItemsState
-                  .filter((wi) => wi.stageId === stage.id)
+                  .filter((wi) => wi.stageId === stage.id && visibleIds.has(wi.id))
                   .sort((a, b) => a.position - b.position)}
+                totalCount={workItemsState.filter((wi) => wi.stageId === stage.id).length}
+                filtersActive={filtersActive}
+                isHiddenByFilters={filtersActive ? (item) => !isVisible(item) : undefined}
               />
             ))}
           </SortableContext>

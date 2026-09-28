@@ -6,9 +6,19 @@ import { createWorkItem } from "@/lib/actions/work-items";
 import { Button } from "@/components/ui/button";
 import { isRolePermissionError } from "@/lib/errors";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast";
 
-export function AddWorkItemButton({ stagePublicId }: { stagePublicId: string }) {
+export function AddWorkItemButton({
+  stagePublicId,
+  isHiddenByFilters,
+}: {
+  stagePublicId: string;
+  // 014-board-filters-mcp-catalogs FR-014: a new Work Item has no assignee and
+  // no tags; if the board's filters would hide it, say so instead of letting it vanish.
+  isHiddenByFilters?: (item: { assigneeUserId: null; tagNames: string[] }) => boolean;
+}) {
   const router = useRouter();
+  const { toast } = useToast();
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -30,6 +40,9 @@ export function AddWorkItemButton({ stagePublicId }: { stagePublicId: string }) 
 
     setTitle("");
     setAdding(false);
+    if (isHiddenByFilters?.({ assigneeUserId: null, tagNames: [] })) {
+      toast(`${result.data.displayId} was created but is hidden by the active filters.`);
+    }
     router.refresh();
   }
 

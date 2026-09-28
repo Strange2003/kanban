@@ -45,6 +45,7 @@ const EXPECTED_TOOLS = [
   "get_board",
   "get_work_item",
   "link_related",
+  "list_catalogs",
   "list_members",
   "list_projects",
   "move_work_item",
@@ -53,6 +54,7 @@ const EXPECTED_TOOLS = [
   "search_work_items",
   "set_column_closing",
   "set_parent",
+  "set_tag_color",
   "update_work_item",
 ];
 
@@ -127,13 +129,71 @@ describe("POST /api/mcp", () => {
     expect(names.join(" ")).not.toMatch(/invite|role|member_remove|remove_member|transfer|project_(delete|rename)|leave/);
 
     const annotations = Object.fromEntries(tools.map((t: { name: string; annotations: unknown }) => [t.name, t.annotations]));
-    for (const read of ["list_projects", "get_board", "search_work_items", "get_work_item", "list_members"]) {
+    for (const read of ["list_projects", "get_board", "search_work_items", "get_work_item", "list_members", "list_catalogs"]) {
       expect(annotations[read]).toMatchObject({ readOnlyHint: true, openWorldHint: false });
     }
     for (const destructive of ["delete_work_item", "delete_column"]) {
       expect(annotations[destructive]).toMatchObject({ readOnlyHint: false, destructiveHint: true });
     }
     expect(annotations.create_work_items).toMatchObject({ readOnlyHint: false, destructiveHint: false });
+    // 014-board-filters-mcp-catalogs FR-018: recoloring is a plain, repeatable write.
+    expect(annotations.set_tag_color).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: true });
+  });
+
+  // 014-board-filters-mcp-catalogs FR-021: an unknown field is an error, never silently dropped.
+  it("publishes strict input schemas: every object forbids unknown fields", async () => {
+    queue.oauth_consent = [[{ id: "c1" }]];
+    queue.user = [[{ id: "u1" }]];
+    queue.oauth_client = [[{ name: "Claude" }]];
+
+    const { tools } = await resultOf(await createMcpRoute({ verify: verifyAs(claims) })(rpc("tools/list")));
+
+    const loose: string[] = [];
+    const walk = (node: unknown, path: string) => {
+      if (Array.isArray(node)) return node.forEach((child, i) => walk(child, `${path}[${i}]`));
+      if (!node || typeof node !== "object") return;
+      const schema = node as Record<string, unknown>;
+      if (schema.type === "object" && schema.additionalProperties !== false) loose.push(path);
+      for (const [key, child] of Object.entries(schema)) walk(child, `${path}.${key}`);
+    };
+    for (const tool of tools as { name: string; inputSchema: unknown }[]) walk(tool.inputSchema, tool.name);
+    expect(loose).toEqual([]);
+  });
+
+  it("rejects an unknown field by name, before running the tool", async () => {
+    queue.oauth_consent = [[{ id: "c1" }]];
+    queue.user = [[{ id: "u1" }]];
+    queue.oauth_client = [[{ name: "Claude" }]];
+
+    const response = await createMcpRoute({ verify: verifyAs(claims) })(
+      rpc("tools/call", {
+        name: "update_work_item",
+        arguments: { projectId: "p1", workItemId: "KAN-1", title: "New", colour: "red" },
+      }),
+    );
+
+    const result = await resultOf(response);
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("colour");
+    // The tool body never ran: it would have looked the project up first.
+    expect(queue.projects).toBeUndefined();
+  });
+
+  it("names the list element that carries an unknown field", async () => {
+    queue.oauth_consent = [[{ id: "c1" }]];
+    queue.user = [[{ id: "u1" }]];
+    queue.oauth_client = [[{ name: "Claude" }]];
+
+    const response = await createMcpRoute({ verify: verifyAs(claims) })(
+      rpc("tools/call", {
+        name: "create_work_items",
+        arguments: { projectId: "p1", columnId: "c1", items: [{ title: "A", foo: 1 }] },
+      }),
+    );
+
+    const result = await resultOf(response);
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toMatch(/items\.0.*foo/);
   });
 
   it("runs tools as the agent's user: list_projects reads that user's memberships", async () => {

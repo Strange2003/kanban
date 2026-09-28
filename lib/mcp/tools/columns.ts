@@ -19,7 +19,7 @@ export function registerColumnTools(server: McpServer) {
     {
       title: "Create a column",
       description: "Adds a column (a status) at the end of the board.",
-      inputSchema: z.object({ projectId, name: z.string().min(1) }),
+      inputSchema: z.strictObject({ projectId, name: z.string().min(1) }),
       annotations: WRITE,
     },
     async ({ projectId, name }) => {
@@ -34,7 +34,7 @@ export function registerColumnTools(server: McpServer) {
     {
       title: "Rename a column",
       description: "Renames a column.",
-      inputSchema: z.object({ projectId, columnId, name: z.string().min(1) }),
+      inputSchema: z.strictObject({ projectId, columnId, name: z.string().min(1) }),
       annotations: WRITE,
     },
     async ({ projectId, columnId, name }) => {
@@ -50,7 +50,7 @@ export function registerColumnTools(server: McpServer) {
     {
       title: "Reorder columns",
       description: "Sets the left-to-right order of the board's columns. Send every columnId, in the new order.",
-      inputSchema: z.object({ projectId, columnIds: z.array(z.string().min(1)).min(1) }),
+      inputSchema: z.strictObject({ projectId, columnIds: z.array(z.string().min(1)).min(1) }),
       annotations: WRITE,
     },
     async ({ projectId, columnIds }) => {
@@ -67,7 +67,7 @@ export function registerColumnTools(server: McpServer) {
       description:
         "Marks (true) or unmarks (false) a column as a closing column. Work Items in a closing column count as " +
         "closed, so this closes or reopens every Work Item in it.",
-      inputSchema: z.object({ projectId, columnId, isClosing: z.boolean() }),
+      inputSchema: z.strictObject({ projectId, columnId, isClosing: z.boolean() }),
       annotations: WRITE,
     },
     async ({ projectId, columnId, isClosing }) => {
@@ -85,7 +85,7 @@ export function registerColumnTools(server: McpServer) {
       description:
         "Deletes an EMPTY column; a column that still has Work Items is rejected (STAGE_NOT_EMPTY) — move them " +
         "first. Confirm with the user before deleting.",
-      inputSchema: z.object({ projectId, columnId }),
+      inputSchema: z.strictObject({ projectId, columnId }),
       annotations: DESTRUCTIVE,
     },
     async ({ projectId, columnId }) => {
