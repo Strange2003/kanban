@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, desc, eq, gte, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { db } from "@/db/client";
@@ -294,7 +294,9 @@ export async function listMyNotifications(): Promise<Result<NotificationItem[]>>
       .innerJoin(invitations, eq(invitations.publicId, sql<string>`${notifications.payload}->>'invitationId'`))
       .innerJoin(projects, eq(projects.id, invitations.projectId))
       .innerJoin(user, eq(user.id, invitations.invitedByUserId))
-      .where(inboxOfMine("invitation"))
+      // A cancelled invitation disappears for the invitee (FR-011 of
+      // 001-accounts-invitations); accepted/rejected ones stay as history.
+      .where(and(inboxOfMine("invitation"), ne(invitations.status, "cancelled")))
       .orderBy(desc(notifications.createdAt))
       .limit(INBOX_LIMIT);
 
