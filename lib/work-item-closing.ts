@@ -32,3 +32,22 @@ export function nextClosedAt(input: {
   if (fromIsClosing === true) return { closedAt: null, event: "reopened" };
   return { closedAt: null, event: null };
 }
+
+/**
+ * KAN-7: the board hides Work Items that have been closed for more than this
+ * many days, so a closing column doesn't grow forever. Fixed, not configurable.
+ * List, Table, search and MCP still show them — this is display only.
+ */
+export const BOARD_ARCHIVE_AFTER_DAYS = 14;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The instant before which a `closed_at` counts as archived on the board. */
+export function boardArchiveCutoff(now: Date): Date {
+  return new Date(now.getTime() - BOARD_ARCHIVE_AFTER_DAYS * DAY_MS);
+}
+
+/** Hidden from the board iff closed strictly more than 14 days before `now`. */
+export function isArchivedOnBoard(closedAt: Date | null, now: Date): boolean {
+  return closedAt !== null && closedAt.getTime() < boardArchiveCutoff(now).getTime();
+}

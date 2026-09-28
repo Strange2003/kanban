@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   SortableContext,
@@ -255,6 +256,18 @@ export function StageColumn({
             />
           ))}
         </SortableContext>
+        {stage.hiddenClosedCount > 0 && (
+          // KAN-7: closed for more than 14 days — still in List, Table and search.
+          <p className="text-muted-foreground px-1 py-1 text-center text-xs" data-testid="archived-hint">
+            {stage.hiddenClosedCount} older {stage.hiddenClosedCount === 1 ? "item" : "items"} hidden ·{" "}
+            <Link
+              href={`/projects/${projectPublicId}/list?stage=${encodeURIComponent(stage.publicId)}`}
+              className="rounded underline hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              view in List
+            </Link>
+          </p>
+        )}
         {workItems.length === 0 && totalCount > 0 && (
           <p className="text-muted-foreground px-1 py-2 text-center text-xs" data-testid="hidden-by-filters">
             Hidden by filters

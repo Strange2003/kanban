@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, asc, desc, eq, gt, gte, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
 import {
@@ -462,6 +462,27 @@ export async function reorderWorkItemsInStage(input: {
           // on every item in the column (008-work-item-fields research.md § `updated_at`).
           .set({ position: index })
           .where(and(eq(workItems.id, workItemId), eq(workItems.stageId, input.stageId)));
+      }
+
+      // KAN-7: the board leaves out Work Items closed for over 14 days, so the
+      // client's list can be shorter than the column. Any item not listed keeps
+      // its relative order and goes after the listed ones — otherwise it would
+      // keep an old position and tie with a listed item.
+      const unlisted = await tx
+        .select({ id: workItems.id })
+        .from(workItems)
+        .where(
+          and(
+            eq(workItems.stageId, input.stageId),
+            input.orderedWorkItemIds.length > 0 ? notInArray(workItems.id, input.orderedWorkItemIds) : undefined,
+          ),
+        )
+        .orderBy(asc(workItems.position), asc(workItems.id));
+      for (const [offset, row] of unlisted.entries()) {
+        await tx
+          .update(workItems)
+          .set({ position: input.orderedWorkItemIds.length + offset })
+          .where(eq(workItems.id, row.id));
       }
     });
 

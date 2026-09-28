@@ -156,11 +156,14 @@ export function Board({
     if (!current || current.stageId === toStageId) return;
 
     const previous = workItemsState;
-    const toPosition = workItemsState.filter((wi) => wi.stageId === toStageId).length;
     // 008-work-item-fields: same closing rule the server applies (nextClosedAt),
     // so moving into/out of a closing column flips "overdue" instantly.
     const fromStage = stagesState.find((s) => s.id === current.stageId);
     const toStage = stagesState.find((s) => s.id === toStageId);
+    // KAN-7: positions are contiguous over visible + hidden (archived) items, so
+    // "the end" also counts the archived ones the board doesn't hold.
+    const toPosition =
+      workItemsState.filter((wi) => wi.stageId === toStageId).length + (toStage?.hiddenClosedCount ?? 0);
     const { closedAt } = nextClosedAt({
       fromIsClosing: fromStage?.isClosing ?? false,
       toIsClosing: toStage?.isClosing ?? false,
