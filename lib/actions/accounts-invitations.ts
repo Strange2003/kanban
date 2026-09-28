@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { db } from "@/db/client";
@@ -237,6 +237,9 @@ export type NotificationWithInvitation = {
   projectPublicId: string;
   projectName: string;
   invitedByName: string;
+  read: boolean;
+  // Buttons only make sense while "pending"; afterwards the row is history.
+  status: "pending" | "accepted" | "rejected" | "cancelled";
 };
 
 /**
@@ -250,6 +253,7 @@ export type AssignmentNotification = {
   createdAt: Date;
   assignedByName: string;
   agentName: string | null;
+  read: boolean;
 } & (
   | { available: true; projectPublicId: string; projectName: string; workItemDisplayId: string; displayNumber: number; title: string }
   | { available: false }
@@ -257,16 +261,22 @@ export type AssignmentNotification = {
 
 export type NotificationItem = NotificationWithInvitation | AssignmentNotification;
 
+// Inbox (KAN-3): every unread notification plus the ones read in the last
+// INBOX_READ_DAYS days, at most INBOX_LIMIT per kind. Read ones stay visible as history.
+const INBOX_READ_DAYS = 30;
+const INBOX_LIMIT = 100;
+
 // FR-006 of 001-accounts-invitations, US3; assignment notifications of 011-agent-access-mcp.
 export async function listMyNotifications(): Promise<Result<NotificationItem[]>> {
   return runAction(async () => {
     const session = await getSession();
     if (!session) throw new AppError("UNAUTHENTICATED", "You must be signed in.");
-    const unreadOfMine = (type: "invitation" | "work_item_assigned") =>
+    const recentSince = new Date(Date.now() - INBOX_READ_DAYS * 24 * 60 * 60 * 1000);
+    const inboxOfMine = (type: "invitation" | "work_item_assigned") =>
       and(
         eq(notifications.userId, session.user.id),
         eq(notifications.type, type),
-        sql`${notifications.readAt} is null`,
+        or(sql`${notifications.readAt} is null`, gte(notifications.createdAt, recentSince)),
       );
 
     const invitationRows = await db
@@ -277,13 +287,16 @@ export async function listMyNotifications(): Promise<Result<NotificationItem[]>>
         projectPublicId: projects.publicId,
         projectName: projects.name,
         invitedByName: user.name,
+        status: invitations.status,
+        readAt: notifications.readAt,
       })
       .from(notifications)
       .innerJoin(invitations, eq(invitations.publicId, sql<string>`${notifications.payload}->>'invitationId'`))
       .innerJoin(projects, eq(projects.id, invitations.projectId))
       .innerJoin(user, eq(user.id, invitations.invitedByUserId))
-      .where(unreadOfMine("invitation"))
-      .orderBy(desc(notifications.createdAt));
+      .where(inboxOfMine("invitation"))
+      .orderBy(desc(notifications.createdAt))
+      .limit(INBOX_LIMIT);
 
     // The Work Item and project are only resolved through the recipient's
     // CURRENT membership (Principle IV): once they lose access, the
@@ -301,6 +314,7 @@ export async function listMyNotifications(): Promise<Result<NotificationItem[]>>
         projectName: projects.name,
         prefix: projects.workItemPrefix,
         memberUserId: projectMembers.userId,
+        readAt: notifications.readAt,
       })
       .from(notifications)
       .leftJoin(assigner, eq(assigner.id, sql<string>`${notifications.payload}->>'assignedByUserId'`))
@@ -310,8 +324,9 @@ export async function listMyNotifications(): Promise<Result<NotificationItem[]>>
         projectMembers,
         and(eq(projectMembers.projectId, workItems.projectId), eq(projectMembers.userId, session.user.id)),
       )
-      .where(unreadOfMine("work_item_assigned"))
-      .orderBy(desc(notifications.createdAt));
+      .where(inboxOfMine("work_item_assigned"))
+      .orderBy(desc(notifications.createdAt))
+      .limit(INBOX_LIMIT);
 
     const assignments: AssignmentNotification[] = assignmentRows.map((row) => {
       const base = {
@@ -320,6 +335,7 @@ export async function listMyNotifications(): Promise<Result<NotificationItem[]>>
         createdAt: row.createdAt,
         assignedByName: row.assignedByName ?? "Someone",
         agentName: row.agentName,
+        read: row.readAt !== null,
       };
       if (row.memberUserId === null || row.projectPublicId === null || row.displayNumber === null) {
         return { ...base, available: false as const };
@@ -335,7 +351,13 @@ export async function listMyNotifications(): Promise<Result<NotificationItem[]>>
       };
     });
 
-    return [...invitationRows.map((row) => ({ type: "invitation" as const, ...row })), ...assignments].sort(
+    const invitationItems: NotificationWithInvitation[] = invitationRows.map(({ readAt, ...row }) => ({
+      type: "invitation" as const,
+      ...row,
+      read: readAt !== null,
+    }));
+
+    return [...invitationItems, ...assignments].sort(
       (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
     );
   });
