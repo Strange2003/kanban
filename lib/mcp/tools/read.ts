@@ -16,6 +16,7 @@ import { resolveWorkItem } from "@/lib/mcp/resolve";
 import { unwrap } from "@/lib/mcp/result";
 import { DEFAULT_SEARCH_LIMIT, MAX_SEARCH_LIMIT, searchRows } from "@/lib/mcp/search";
 import { describeWorkItemActivity } from "@/lib/work-item-activity";
+import { DEFAULT_TAG_COLOR } from "@/lib/tag-colors";
 import type { AssigneeView } from "@/lib/work-item-view";
 
 // Read tools of the Kanban MCP server (Historia 3 of 011-agent-access-mcp,
@@ -73,8 +74,6 @@ export function registerReadTools(server: McpServer) {
     },
     async ({ projectId }) => {
       const board = unwrap(await getBoard(projectId));
-      const view = unwrap(await getWorkItemsView(projectId));
-      const rowById = new Map(view.rows.map((r) => [r.id, r]));
       return {
         role: board.role,
         columns: board.stages.map((stage) => ({
@@ -90,7 +89,8 @@ export function registerReadTools(server: McpServer) {
               priority: wi.priority,
               targetDate: wi.targetDate,
               isClosed: stage.isClosing,
-              tags: rowById.get(wi.id)?.tags ?? [],
+              // With their colors (FR-021 of 013-project-catalogs), straight from getBoard.
+              tags: wi.tags,
             })),
         })),
       };
@@ -170,11 +170,14 @@ export function registerReadTools(server: McpServer) {
         column: detail.stage.name,
         isClosed: detail.stage.isClosing,
         assignee: person(detail.assignee),
-        tags: detail.itemTags,
+        tags: detail.itemTags.map((name) => ({
+          name,
+          color: detail.catalogTags.find((t) => t.name === name)?.color ?? DEFAULT_TAG_COLOR,
+        })),
         priority: workItem.priority,
         severity: workItem.severity,
         area: detail.itemArea,
-        iteration: detail.itemIteration,
+        size: detail.itemSize,
         startDate: workItem.startDate,
         targetDate: workItem.targetDate,
         closedAt: workItem.closedAt,

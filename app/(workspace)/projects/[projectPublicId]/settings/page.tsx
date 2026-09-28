@@ -53,6 +53,20 @@ export default async function ProjectSettingsPage({
         project.description && <p className="text-muted-foreground text-sm">{project.description}</p>
       )}
 
+      {/* 013-project-catalogs FR-001: the catalogs live on their own page. */}
+      <section className="space-y-1">
+        <h2 className="text-lg font-semibold">Tags, areas &amp; sizes</h2>
+        <p className="text-muted-foreground text-sm">
+          The values this project uses to classify its Work Items.{" "}
+          <Link
+            href={`/projects/${projectPublicId}/settings/catalogs`}
+            className="text-foreground underline underline-offset-4"
+          >
+            Manage tags, areas &amp; sizes
+          </Link>
+        </p>
+      </section>
+
       <MembersList
         projectPublicId={projectPublicId}
         members={members}

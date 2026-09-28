@@ -7,6 +7,7 @@
  * tree) are unit-tested table by table.
  */
 import { WORK_ITEM_LEVELS, isOverdue, type WorkItemLevel } from "./work-item-fields";
+import type { TagColor } from "./tag-colors";
 
 /** A project member as shown next to a Work Item (011-agent-access-mcp FR-007). */
 export type AssigneeView = { userId: string; name: string; image: string | null };
@@ -26,7 +27,7 @@ export type WorkItemViewRow = {
   priority: WorkItemLevel | null;
   severity: WorkItemLevel | null;
   areaName: string | null;
-  iterationName: string | null;
+  sizeName: string | null;
   tags: string[];
   // 011-agent-access-mcp FR-001/FR-008 (replaces `stakeholder`).
   assignee: AssigneeView | null;
@@ -40,8 +41,9 @@ export type WorkItemViewRow = {
 export type WorkItemViewOptions = {
   stages: { publicId: string; name: string; isClosing: boolean }[];
   areas: string[];
-  iterations: string[];
-  tags: string[];
+  sizes: string[];
+  // With their colors, for the Tag filter and the Table (FR-019 of 013-project-catalogs).
+  tags: { name: string; color: TagColor }[];
   // Every current member, for the Assignee filter (011-agent-access-mcp FR-008).
   members: AssigneeView[];
 };
@@ -54,7 +56,7 @@ export const SORT_KEYS = [
   "priority",
   "severity",
   "area",
-  "iteration",
+  "size",
   "assignee",
   "startDate",
   "targetDate",
@@ -75,7 +77,7 @@ export type ViewQuery = {
   severities: LevelFilter[];
   // Names; "none" matches an empty field.
   areas: string[];
-  iterations: string[];
+  sizes: string[];
   tags: string[];
   // User ids; "none" = unassigned, "me" = the viewer (011-agent-access-mcp FR-008).
   assignees: string[];
@@ -104,7 +106,7 @@ export const DEFAULT_VIEW_QUERY: ViewQuery = {
   priorities: [],
   severities: [],
   areas: [],
-  iterations: [],
+  sizes: [],
   tags: [],
   assignees: [],
   overdue: false,
@@ -135,7 +137,7 @@ function list(params: URLSearchParams, key: string): string[] {
 /**
  * Parses the address into a ViewQuery. Anything invalid — an unknown status,
  * sort key, direction, level or column — is dropped silently and the rest
- * still applies (Edge Cases). Area/iteration/tag names aren't checked against
+ * still applies (Edge Cases). Area/size/tag names aren't checked against
  * the catalog: an unknown name simply matches nothing.
  */
 export function parseViewQuery(params: URLSearchParams, validStagePublicIds: ReadonlySet<string>): ViewQuery {
@@ -149,7 +151,7 @@ export function parseViewQuery(params: URLSearchParams, validStagePublicIds: Rea
     priorities: list(params, "priority").filter((v) => LEVEL_VALUES.includes(v)) as LevelFilter[],
     severities: list(params, "severity").filter((v) => LEVEL_VALUES.includes(v)) as LevelFilter[],
     areas: list(params, "area"),
-    iterations: list(params, "iteration"),
+    sizes: list(params, "size"),
     tags: list(params, "tag"),
     // User ids are case-sensitive, so dedupe them exactly. An unknown id simply matches nothing.
     assignees: [...new Set(params.getAll("assignee").map((v) => v.trim()).filter(Boolean))],
@@ -173,7 +175,7 @@ export function serializeViewQuery(query: ViewQuery, view: "list" | "table"): st
   appendAll("priority", query.priorities);
   appendAll("severity", query.severities);
   appendAll("area", query.areas);
-  appendAll("iteration", query.iterations);
+  appendAll("size", query.sizes);
   appendAll("tag", query.tags);
   appendAll("assignee", query.assignees);
   if (query.overdue) params.set("overdue", "1");
@@ -193,7 +195,7 @@ export function hasActiveFilters(query: ViewQuery): boolean {
     query.priorities.length > 0 ||
     query.severities.length > 0 ||
     query.areas.length > 0 ||
-    query.iterations.length > 0 ||
+    query.sizes.length > 0 ||
     query.tags.length > 0 ||
     query.assignees.length > 0 ||
     query.overdue ||
@@ -247,7 +249,7 @@ export function filterWorkItems(
     if (!matchesLevel(query.priorities, row.priority)) return false;
     if (!matchesLevel(query.severities, row.severity)) return false;
     if (!matchesName(query.areas, row.areaName)) return false;
-    if (!matchesName(query.iterations, row.iterationName)) return false;
+    if (!matchesName(query.sizes, row.sizeName)) return false;
     if (query.tags.length) {
       const rowTags = row.tags.map((t) => t.toLowerCase());
       const ok = (tagNone && rowTags.length === 0) || tagNames.some((t) => rowTags.includes(t));
@@ -265,8 +267,20 @@ export function filterWorkItems(
 const levelRank = (level: WorkItemLevel | null) => (level === null ? null : WORK_ITEM_LEVELS.indexOf(level));
 const time = (d: Date | null) => (d === null ? null : new Date(d).getTime());
 
+/** Each catalog's names in the user's manual order (FR-017 of 013-project-catalogs). */
+export type CatalogOrder = { areas: readonly string[]; sizes: readonly string[] };
+
+// A value's place in its catalog, case-insensitively. A name missing from the
+// catalog (shouldn't happen) sorts after every known one.
+function catalogRank(order: readonly string[] | undefined, name: string | null): number | string | null {
+  if (name === null) return null;
+  if (!order) return name;
+  const index = order.findIndex((value) => value.toLowerCase() === name.toLowerCase());
+  return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+}
+
 // The value a row is sorted by; `null` means empty (always sorted last).
-function sortValue(row: WorkItemViewRow, key: SortKey): string | number | null {
+function sortValue(row: WorkItemViewRow, key: SortKey, catalogs?: CatalogOrder): string | number | null {
   switch (key) {
     case "id":
       return row.displayNumber;
@@ -281,9 +295,9 @@ function sortValue(row: WorkItemViewRow, key: SortKey): string | number | null {
     case "severity":
       return levelRank(row.severity);
     case "area":
-      return row.areaName;
-    case "iteration":
-      return row.iterationName;
+      return catalogRank(catalogs?.areas, row.areaName);
+    case "size":
+      return catalogRank(catalogs?.sizes, row.sizeName);
     case "assignee":
       return row.assignee?.name ?? null;
     case "startDate":
@@ -297,19 +311,26 @@ function sortValue(row: WorkItemViewRow, key: SortKey): string | number | null {
   }
 }
 
-const TEXT_KEYS: ReadonlySet<SortKey> = new Set(["title", "area", "iteration", "assignee"]);
+const TEXT_KEYS: ReadonlySet<SortKey> = new Set(["title", "area", "size", "assignee"]);
 
 /**
  * FR-006: priority/severity by level (Critical first in asc), the board
  * column by its position, empties ALWAYS last in both directions, and ties
  * broken by Work Item number ascending so the order is predictable (Edge
- * Cases). Returns a new array.
+ * Cases). Area and size go by the catalog's manual order when `catalogs` is
+ * given (FR-017 of 013-project-catalogs), alphabetically otherwise. Returns a
+ * new array.
  */
-export function sortWorkItems(rows: WorkItemViewRow[], sort: SortKey, dir: SortDir): WorkItemViewRow[] {
+export function sortWorkItems(
+  rows: WorkItemViewRow[],
+  sort: SortKey,
+  dir: SortDir,
+  catalogs?: CatalogOrder,
+): WorkItemViewRow[] {
   const sign = dir === "asc" ? 1 : -1;
   return [...rows].sort((a, b) => {
-    const va = sortValue(a, sort);
-    const vb = sortValue(b, sort);
+    const va = sortValue(a, sort, catalogs);
+    const vb = sortValue(b, sort, catalogs);
     if (va === null && vb !== null) return 1;
     if (vb === null && va !== null) return -1;
     if (va !== null && vb !== null && va !== vb) {

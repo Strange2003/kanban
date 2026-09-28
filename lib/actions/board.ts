@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
-import { stages, workItems } from "@/db/schema";
+import { stages, tags, workItems, workItemTags } from "@/db/schema";
 import { logActivity } from "@/lib/activity";
 import { requireProjectMember, requireProjectPermission } from "@/lib/permissions";
 import { generatePublicId } from "@/lib/ids";
@@ -12,9 +12,16 @@ import { AppError, runAction, type Result } from "@/lib/errors";
 import type { WorkItemWithDisplayId } from "@/lib/actions/work-items";
 import type { AssigneeView } from "@/lib/work-item-view";
 import { user } from "@/db/auth-schema";
+import type { TagColor } from "@/lib/tag-colors";
 
-/** A Work Item on the board, with its assignee (FR-007 of 011-agent-access-mcp). */
-export type BoardWorkItem = WorkItemWithDisplayId & { assignee: AssigneeView | null };
+/**
+ * A Work Item on the board, with its assignee (FR-007 of 011-agent-access-mcp)
+ * and its tags' colors for the card's color line (FR-010 of 013-project-catalogs).
+ */
+export type BoardWorkItem = WorkItemWithDisplayId & {
+  assignee: AssigneeView | null;
+  tags: { name: string; color: TagColor }[];
+};
 import type { ProjectRole } from "@/lib/roles";
 
 export type StageWithCount = typeof stages.$inferSelect & { workItemCount: number };
@@ -46,6 +53,19 @@ export async function getBoard(
       .where(eq(workItems.projectId, project.id))
       .orderBy(asc(workItems.position));
 
+    // One query for every card's tags, not one per card (013-project-catalogs
+    // research.md § Línea de colores); alphabetical per Work Item (FR-017).
+    const tagRows = await db
+      .select({ workItemId: workItemTags.workItemId, name: tags.name, color: tags.color })
+      .from(workItemTags)
+      .innerJoin(tags, eq(tags.id, workItemTags.tagId))
+      .where(eq(tags.projectId, project.id))
+      .orderBy(asc(tags.name));
+    const tagsByItem = new Map<number, { name: string; color: TagColor }[]>();
+    for (const { workItemId, name, color } of tagRows) {
+      tagsByItem.set(workItemId, [...(tagsByItem.get(workItemId) ?? []), { name, color }]);
+    }
+
     return {
       stages: stageRows.map((r) => ({ ...r.stage, workItemCount: r.workItemCount })),
       workItems: workItemRows.map(({ workItem: wi, assigneeName, assigneeImage }) => ({
@@ -55,6 +75,7 @@ export async function getBoard(
           wi.assigneeUserId !== null
             ? { userId: wi.assigneeUserId, name: assigneeName ?? "Unknown", image: assigneeImage }
             : null,
+        tags: tagsByItem.get(wi.id) ?? [],
       })),
       role: membership.role,
       projectName: project.name,

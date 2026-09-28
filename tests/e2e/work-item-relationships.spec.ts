@@ -113,9 +113,9 @@ test.describe("Work Item Relationships", () => {
     await backToBoard(page);
 
     await openCard(page, "Design login");
-    await expect(page.getByText("Children", { exact: true })).toBeVisible();
+    await expect(page.getByText(/^Children \(\d+\)$/)).toBeVisible();
     await expect(page.getByRole("link", { name: /Implement form/ })).toBeVisible();
-    await expect(page.getByText("Related", { exact: true })).toBeVisible();
+    await expect(page.getByText(/^Related \(\d+\)$/)).toBeVisible();
     await expect(page.getByRole("link", { name: /Document login API/ })).toBeVisible();
 
     // Navigate from the parent's page straight to its child — a real URL

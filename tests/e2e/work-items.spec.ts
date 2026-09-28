@@ -10,6 +10,7 @@ import {
   addWorkItem,
   clickUntilVisible,
   stageColumn,
+  createFromField,
 } from "./helpers";
 
 // quickstart.md bloque 4.
@@ -63,7 +64,7 @@ test.describe("Work Items", () => {
 
     await page.getByLabel("Description", { exact: true }).fill("Match the new brand colors.");
     await page.getByPlaceholder("Add a tag...").fill("design");
-    await page.getByRole("button", { name: 'Create "design"' }).click();
+    await createFromField(page, "design");
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
     await page.waitForLoadState("networkidle");

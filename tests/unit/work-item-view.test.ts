@@ -31,7 +31,7 @@ function row(over: Partial<WorkItemViewRow> = {}): WorkItemViewRow {
     priority: null,
     severity: null,
     areaName: null,
-    iterationName: null,
+    sizeName: null,
     tags: [],
     assignee: null,
     startDate: null,
@@ -53,7 +53,7 @@ describe("parseViewQuery / serializeViewQuery (FR-009)", () => {
       priorities: ["critical", "none"],
       severities: ["low"],
       areas: ["Frontend"],
-      iterations: ["Sprint 12"],
+      sizes: ["Sprint 12"],
       tags: ["a, b", "none"],
       overdue: true,
       q: "login",
@@ -107,10 +107,10 @@ describe("parseViewQuery / serializeViewQuery (FR-009)", () => {
 describe("filterWorkItems (FR-007, FR-010)", () => {
   const today = "2026-09-22";
   const rows = [
-    row({ displayNumber: 1, priority: "critical", iterationName: "Sprint 12", tags: ["ui"], stagePublicId: "todo" }),
-    row({ displayNumber: 2, priority: "high", iterationName: "Sprint 12", isClosed: true, stagePublicId: "done" }),
+    row({ displayNumber: 1, priority: "critical", sizeName: "Sprint 12", tags: ["ui"], stagePublicId: "todo" }),
+    row({ displayNumber: 2, priority: "high", sizeName: "Sprint 12", isClosed: true, stagePublicId: "done" }),
     row({ displayNumber: 3, priority: null, areaName: "Frontend", targetDate: "2026-09-21" }),
-    row({ displayNumber: 4, priority: "critical", iterationName: "Sprint 13", title: "Fix login" }),
+    row({ displayNumber: 4, priority: "critical", sizeName: "Sprint 13", title: "Fix login" }),
     row({ displayNumber: 5, targetDate: "2026-09-21", isClosed: true, closedAt: new Date("2026-09-22T10:00:00Z") }),
   ];
 
@@ -124,7 +124,7 @@ describe("filterWorkItems (FR-007, FR-010)", () => {
   });
 
   it("combines different filters with AND", () => {
-    const result = filterWorkItems(rows, q({ status: "open", priorities: ["critical"], iterations: ["sprint 12"] }), today);
+    const result = filterWorkItems(rows, q({ status: "open", priorities: ["critical"], sizes: ["sprint 12"] }), today);
     expect(numbers(result)).toEqual([1]);
   });
 
@@ -302,5 +302,22 @@ describe("assignee filter and sort (011-agent-access-mcp FR-008)", () => {
   it("sorts by assignee name case-insensitively, unassigned always last", () => {
     expect(numbers(sortWorkItems(rows, "assignee", "asc"))).toEqual([3, 4, 1, 2]);
     expect(numbers(sortWorkItems(rows, "assignee", "desc"))).toEqual([1, 3, 4, 2]);
+  });
+
+  // FR-017 of 013-project-catalogs: sizes follow the catalog's manual order, not the alphabet.
+  it("sorts area and size by the catalog's manual order, empties last in both directions", () => {
+    const sized = [
+      row({ displayNumber: 1, sizeName: "XL" }),
+      row({ displayNumber: 2, sizeName: null }),
+      row({ displayNumber: 3, sizeName: "s" }),
+      row({ displayNumber: 4, sizeName: "L" }),
+      row({ displayNumber: 5, sizeName: "M" }),
+    ];
+    const catalogs = { areas: [], sizes: ["S", "M", "L", "XL"] };
+
+    expect(numbers(sortWorkItems(sized, "size", "asc", catalogs))).toEqual([3, 5, 4, 1, 2]);
+    expect(numbers(sortWorkItems(sized, "size", "desc", catalogs))).toEqual([1, 4, 5, 3, 2]);
+    // Without a catalog, alphabetical as before.
+    expect(numbers(sortWorkItems(sized, "size", "asc"))).toEqual([4, 5, 3, 1, 2]);
   });
 });

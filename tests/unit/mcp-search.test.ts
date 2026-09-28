@@ -18,7 +18,7 @@ function row(n: number, over: Partial<SearchRow> = {}): SearchRow {
     priority: null,
     severity: null,
     areaName: null,
-    iterationName: null,
+    sizeName: null,
     tags: [],
     assignee: null,
     startDate: null,

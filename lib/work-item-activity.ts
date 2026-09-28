@@ -25,7 +25,10 @@ const FIELD_LABELS: Record<string, string> = {
   priority: "Priority",
   severity: "Severity",
   area: "Area",
-  iteration: "Iteration",
+  // 013-project-catalogs FR-016: Size is 008's Iteration renamed; older events
+  // keep the `iteration` key and read as Size too.
+  iteration: "Size",
+  size: "Size",
   startDate: "Start date",
   targetDate: "Target date",
   estimateMinutes: "Estimate",
@@ -48,7 +51,7 @@ export function describeWorkItemActivity(
 ): string {
   if (entry.type === "stage_changed") return "Moved to a different column";
   if (entry.type === "fields_edited") {
-    const payload = entry.payload as { fields?: Record<string, { from: unknown; to: unknown }> };
+    const payload = entry.payload as { fields?: Record<string, { from: unknown; to: unknown }>; reason?: string };
     const fields = payload.fields ?? {};
     const legacy = Object.keys(fields).filter((f) => !(f in FIELD_LABELS));
     const parts = [
@@ -60,6 +63,15 @@ export function describeWorkItemActivity(
             `${FIELD_LABELS[f]}: ${formatFieldValue(f, c.from, formatDate)} → ${formatFieldValue(f, c.to, formatDate)}`,
         ),
     ];
+    // FR-006 of 013-project-catalogs: removed because the value was deleted from the catalog.
+    if (payload.reason === "catalog_value_deleted") {
+      const tagChange = fields.tags as { from?: string[]; to?: string[] } | undefined;
+      if (tagChange) {
+        const removed = (tagChange.from ?? []).filter((name) => !(tagChange.to ?? []).includes(name));
+        return `Tag removed: ${removed.join(", ")} (value deleted)`;
+      }
+      return `${parts.join("; ")} (value deleted)`;
+    }
     return parts.length > 0 ? parts.join("; ") : "Edited";
   }
   if (entry.type === "closed") {

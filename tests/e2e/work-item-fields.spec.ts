@@ -10,6 +10,7 @@ import {
   inviteAndAccept,
   clickUntilVisible,
   stageColumn,
+  createFromField,
 } from "./helpers";
 
 // quickstart.md of 008-work-item-fields, one describe block per user story.
@@ -189,7 +190,7 @@ test.describe("Extended fields — closing columns and Close (US3)", () => {
   });
 });
 
-test.describe("Extended fields — area and iteration (US4)", () => {
+test.describe("Extended fields — area and size (US4; size was iteration before 013)", () => {
   // quickstart.md bloques 4 y 5.
   test("creates catalog values inline, reuses them case-insensitively, and keeps projects apart", async ({ page }) => {
     await signUpNewUser(page);
@@ -200,9 +201,9 @@ test.describe("Extended fields — area and iteration (US4)", () => {
 
     await openCard(page, "First item");
     await page.getByLabel("Area", { exact: true }).fill("Frontend");
-    await page.getByRole("button", { name: 'Create "Frontend"' }).click();
-    await page.getByLabel("Iteration", { exact: true }).fill("Sprint 1");
-    await page.getByRole("button", { name: 'Create "Sprint 1"' }).click();
+    await createFromField(page, "Frontend");
+    await page.getByLabel("Size", { exact: true }).fill("Sprint 1");
+    await createFromField(page, "Sprint 1");
     await save(page);
     await page.getByRole("tab", { name: "History" }).click();
     await expect(page.getByText("Area: None → Frontend")).toBeVisible();
@@ -213,10 +214,10 @@ test.describe("Extended fields — area and iteration (US4)", () => {
     await page.getByLabel("Area", { exact: true }).fill("front");
     await expect(page.getByRole("button", { name: "Frontend", exact: true })).toBeVisible();
     await page.getByLabel("Area", { exact: true }).fill("FRONTEND");
-    await expect(page.getByRole("button", { name: 'Create "FRONTEND"' })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: 'Create new "FRONTEND"' })).toHaveCount(0);
     await page.getByLabel("Area", { exact: true }).press("Enter");
     await expect(page.getByRole("button", { name: "Remove area Frontend" })).toBeVisible();
-    // Separate catalogs: the iteration "Sprint 1" is not an area.
+    // Separate catalogs: the size "Sprint 1" is not an area.
     await page.getByLabel("Area", { exact: true }).fill("Sprint");
     await expect(page.getByRole("button", { name: "Sprint 1", exact: true })).toHaveCount(0);
     await page.getByLabel("Area", { exact: true }).fill("");
@@ -238,7 +239,7 @@ test.describe("Extended fields — area and iteration (US4)", () => {
     await addWorkItem(page, "Elsewhere");
     await openCard(page, "Elsewhere");
     await page.getByLabel("Area", { exact: true }).fill("Front");
-    await expect(page.getByRole("button", { name: 'Create "Front"' })).toBeVisible();
+    await expect(page.getByRole("button", { name: 'Create new "Front"' })).toBeVisible();
     await expect(page.getByRole("button", { name: "Frontend", exact: true })).toHaveCount(0);
   });
 });

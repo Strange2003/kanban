@@ -14,8 +14,10 @@ import {
   type WorkItemViewOptions,
 } from "@/lib/work-item-view";
 import { cn } from "@/lib/utils";
+import { TAG_COLOR_STYLES, type TagColor } from "@/lib/tag-colors";
 
-type Choice = { value: string; label: string };
+// `color`: a tag's palette color, shown as a dot (FR-019 of 013-project-catalogs).
+type Choice = { value: string; label: string; color?: TagColor };
 
 // One multi-value filter (FR-007): a button that opens a small panel of
 // checkboxes. Values inside it combine with OR; Escape or a click outside
@@ -103,6 +105,9 @@ function MultiSelectFilter({
                 checked={isSelected(choice.value)}
                 onChange={() => toggle(choice.value)}
               />
+              {choice.color && (
+                <span aria-hidden className={cn("h-2.5 w-2.5 shrink-0 rounded-full", TAG_COLOR_STYLES[choice.color].swatch)} />
+              )}
               {choice.label}
             </label>
           ))}
@@ -151,7 +156,7 @@ export function ViewFilters({
     query.stages.length +
     query.severities.length +
     query.areas.length +
-    query.iterations.length +
+    query.sizes.length +
     query.tags.length;
   const activeFilters: { key: string; label: string; remove: () => void }[] = [];
   if (query.q)
@@ -186,7 +191,7 @@ export function ViewFilters({
     });
   for (const [key, label, values] of [
     ["areas", "Area", query.areas],
-    ["iterations", "Iteration", query.iterations],
+    ["sizes", "Size", query.sizes],
     ["tags", "Tag", query.tags],
   ] as const) {
     for (const value of values)
@@ -323,14 +328,14 @@ export function ViewFilters({
             onChange={(areas) => set({ areas })}
           />
           <MultiSelectFilter
-            label="Iteration"
-            choices={nameChoices(options.iterations)}
-            selected={query.iterations}
-            onChange={(iterations) => set({ iterations })}
+            label="Size"
+            choices={nameChoices(options.sizes)}
+            selected={query.sizes}
+            onChange={(sizes) => set({ sizes })}
           />
           <MultiSelectFilter
             label="Tag"
-            choices={nameChoices(options.tags)}
+            choices={withNone(options.tags.map((t) => ({ value: t.name, label: t.name, color: t.color })))}
             selected={query.tags}
             onChange={(tags) => set({ tags })}
           />

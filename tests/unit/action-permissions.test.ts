@@ -121,6 +121,13 @@ import {
 import { sendInvitation, cancelInvitation, listPendingInvitations } from "@/lib/actions/accounts-invitations";
 import type { Result } from "@/lib/errors";
 import { addWorkItemComment, addWorkItemTimeEntry, removeWorkItemTimeEntry } from "@/lib/actions/work-item-discussion";
+import {
+  createCatalogValue,
+  renameCatalogValue,
+  setTagColor,
+  reorderCatalog,
+  deleteCatalogValue,
+} from "@/lib/actions/project-catalogs";
 
 type Case = {
   /** Exported name, checked for completeness by the "every action is covered" test at the bottom. */
@@ -154,7 +161,7 @@ export const CASES: Case[] = [
   { action: "createWorkItems", permission: "workItem:edit", run: () => createWorkItems({ stagePublicId: "stage-1", items: [{ title: "A" }, { title: "B", assigneeUserId: "someone" }] }), denied: READ_ONLY_DENIED, allowed: EDITORS },
   { action: "moveWorkItem", permission: "workItem:edit", run: () => moveWorkItem({ workItemId: 1, toStageId: 1, toPosition: 0 }), denied: READ_ONLY_DENIED, allowed: EDITORS },
   { action: "reorderWorkItemsInStage", permission: "workItem:edit", run: () => reorderWorkItemsInStage({ stageId: 1, orderedWorkItemIds: [1] }), denied: READ_ONLY_DENIED, allowed: EDITORS },
-  { action: "updateWorkItem", permission: "workItem:edit", run: () => updateWorkItem({ workItemId: 1, title: "Edited", tagNames: ["new-tag"], priority: "high", severity: "low", areaName: "Frontend", iterationName: "Sprint 1", startDate: "2026-10-01", targetDate: "2026-10-15" }), denied: READ_ONLY_DENIED, allowed: EDITORS },
+  { action: "updateWorkItem", permission: "workItem:edit", run: () => updateWorkItem({ workItemId: 1, title: "Edited", tagNames: ["new-tag"], priority: "high", severity: "low", areaName: "Frontend", sizeName: "M", startDate: "2026-10-01", targetDate: "2026-10-15" }), denied: READ_ONLY_DENIED, allowed: EDITORS },
   { action: "deleteWorkItem", permission: "workItem:edit", run: () => deleteWorkItem(1), denied: READ_ONLY_DENIED, allowed: EDITORS },
   // 008-work-item-fields (FR-014/FR-019): "Close" moves the Work Item, so it's a Work Item edit.
   { action: "closeWorkItem", permission: "workItem:edit", run: () => closeWorkItem(1), denied: READ_ONLY_DENIED, allowed: EDITORS },
@@ -167,6 +174,13 @@ export const CASES: Case[] = [
   { action: "removeWorkItemParent", permission: "relationship:edit", run: () => removeWorkItemParent(1), denied: READ_ONLY_DENIED, allowed: EDITORS },
   { action: "linkRelatedWorkItems", permission: "relationship:edit", run: () => linkRelatedWorkItems({ workItemIdX: 1, workItemIdY: 2 }), denied: READ_ONLY_DENIED, allowed: EDITORS },
   { action: "unlinkRelatedWorkItems", permission: "relationship:edit", run: () => unlinkRelatedWorkItems({ workItemIdX: 1, workItemIdY: 2 }), denied: READ_ONLY_DENIED, allowed: EDITORS },
+
+  // --- catalog:manage (lib/actions/project-catalogs.ts, 013-project-catalogs FR-007)
+  { action: "createCatalogValue", permission: "catalog:manage", run: () => createCatalogValue({ projectPublicId: P, kind: "tag", name: "UX", color: "blue" }), denied: READ_ONLY_DENIED, allowed: EDITORS },
+  { action: "renameCatalogValue", permission: "catalog:manage", run: () => renameCatalogValue({ projectPublicId: P, kind: "area", name: "Front", newName: "Frontend" }), denied: READ_ONLY_DENIED, allowed: EDITORS },
+  { action: "setTagColor", permission: "catalog:manage", run: () => setTagColor({ projectPublicId: P, name: "UX", color: "red" }), denied: READ_ONLY_DENIED, allowed: EDITORS },
+  { action: "reorderCatalog", permission: "catalog:manage", run: () => reorderCatalog({ projectPublicId: P, kind: "size", orderedNames: ["S", "M"] }), denied: READ_ONLY_DENIED, allowed: EDITORS },
+  { action: "deleteCatalogValue", permission: "catalog:manage", run: () => deleteCatalogValue({ projectPublicId: P, kind: "size", name: "XL" }), denied: READ_ONLY_DENIED, allowed: EDITORS },
 
   // --- owner-only project management (lib/actions/projects.ts)
   { action: "renameProject", permission: "project:edit", run: () => renameProject({ projectPublicId: P, name: "Renamed" }), denied: OWNER_ONLY_DENIED, allowed: ["owner"] },
@@ -236,6 +250,7 @@ import * as workItemsModule from "@/lib/actions/work-items";
 import * as workItemRelationshipsModule from "@/lib/actions/work-item-relationships";
 import * as workItemViewsModule from "@/lib/actions/work-item-views";
 import * as workItemDiscussionModule from "@/lib/actions/work-item-discussion";
+import * as projectCatalogsModule from "@/lib/actions/project-catalogs";
 
 // Reads gated by `requireProjectMember` alone (any member, a Viewer included, may read), or
 // actions that aren't scoped to a project's role at all.
@@ -250,6 +265,7 @@ const MEMBERSHIP_ONLY_READS = [
   "getWorkItemDetailData",
   "getWorkItemDiscussionData",
   "getWorkItemsView", // 009-work-item-views: read-only List/Table data (FR-017)
+  "getProjectCatalogs", // 013-project-catalogs: a Viewer reads the catalogs page too (FR-007)
   "listProjectMembers",
   "listMyProjects", // only the caller's own projects
   "listMyNotifications", // only the caller's own notifications
@@ -270,6 +286,7 @@ describe("every exported Server Action is classified", () => {
     workItemRelationshipsModule,
     workItemViewsModule,
     workItemDiscussionModule,
+    projectCatalogsModule,
   ].flatMap((module) => Object.entries(module).filter(([, value]) => typeof value === "function").map(([name]) => name));
 
   it("has no export missing from the permission sweep, the membership-only reads or the known exceptions", () => {

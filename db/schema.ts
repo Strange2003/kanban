@@ -18,6 +18,7 @@ import {
 import { sql } from "drizzle-orm";
 // Relative (not "@/") so drizzle-kit can load this file without the tsconfig path alias.
 import { WORK_ITEM_LEVELS } from "../lib/work-item-fields";
+import { TAG_COLORS } from "../lib/tag-colors";
 
 /**
  * `userId` / `ownerId` / `invitedByUserId` columns below are `text`, not a
@@ -47,6 +48,9 @@ export const notificationTypeEnum = pgEnum("notification_type", ["invitation", "
 // declaration, so `ORDER BY priority` puts the most urgent first.
 export const workItemPriorityEnum = pgEnum("work_item_priority", WORK_ITEM_LEVELS);
 export const workItemSeverityEnum = pgEnum("work_item_severity", WORK_ITEM_LEVELS);
+// 013-project-catalogs FR-008: a tag's color is a key of the fixed palette in
+// lib/tag-colors.ts, never a free hex value.
+export const tagColorEnum = pgEnum("tag_color", TAG_COLORS);
 
 // --- Proyecto (data-model.md § Proyecto) ---
 export const projects = pgTable("projects", {
@@ -157,11 +161,14 @@ export const stages = pgTable(
   (table) => [index("stages_project_id_idx").on(table.projectId)],
 );
 
-// --- Área / Iteración (008-work-item-fields data-model.md) ---
+// --- Área / Tamaño (008-work-item-fields data-model.md; 013-project-catalogs) ---
 // Two separate per-project catalogs with the same shape as `tags`: values are
-// created inline from a Work Item and reused case-insensitively (FR-006). The
-// client only ever sends names, resolved within the Work Item's project
-// (lib/work-item-catalogs.ts), so an id from another project can't be assigned.
+// reused case-insensitively (FR-006 of 008) and managed from the project's
+// catalogs page (013). The client only ever sends names, resolved within the
+// project (lib/work-item-catalogs.ts), so an id from another project can't be
+// assigned. `sizes` is 008's `iterations` table renamed (FR-015/FR-016 of 013).
+// `position` is the manual order the user sets (FR-003a of 013); reads order
+// by (position, id).
 export const areas = pgTable(
   "areas",
   {
@@ -170,22 +177,22 @@ export const areas = pgTable(
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    position: integer("position").notNull(),
   },
   (table) => [uniqueIndex("areas_project_lower_name_idx").on(table.projectId, sql`lower(${table.name})`)],
 );
 
-export const iterations = pgTable(
-  "iterations",
+export const sizes = pgTable(
+  "sizes",
   {
     id: serial("id").primaryKey(),
     projectId: integer("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    position: integer("position").notNull(),
   },
-  (table) => [
-    uniqueIndex("iterations_project_lower_name_idx").on(table.projectId, sql`lower(${table.name})`),
-  ],
+  (table) => [uniqueIndex("sizes_project_lower_name_idx").on(table.projectId, sql`lower(${table.name})`)],
 );
 
 // --- Work Item (data-model.md § Work Item) ---
@@ -219,10 +226,10 @@ export const workItems = pgTable(
     // 012-work-item-discussion: optional estimate; spent time is derived from
     // work_item_time_entries so the two cannot drift apart.
     estimateMinutes: integer("estimate_minutes"),
-    // `set null` is only defensive: no flow deletes a catalog value (FR-007),
-    // and deleting the project already cascades to its Work Items.
+    // `set null` is only defensive: deleteCatalogValue (013-project-catalogs
+    // FR-006) clears these itself and logs the change before deleting the value.
     areaId: integer("area_id").references(() => areas.id, { onDelete: "set null" }),
-    iterationId: integer("iteration_id").references(() => iterations.id, { onDelete: "set null" }),
+    sizeId: integer("size_id").references(() => sizes.id, { onDelete: "set null" }),
     // Calendar days with no time (FR-009); string mode keeps them "YYYY-MM-DD"
     // instead of a Date at UTC midnight that shifts a day across time zones.
     startDate: date("start_date", { mode: "string" }),
@@ -333,6 +340,9 @@ export const tags = pgTable(
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    // 013-project-catalogs: palette color (gray by default, FR-009) and manual order (FR-003a).
+    color: tagColorEnum("color").notNull().default("gray"),
+    position: integer("position").notNull(),
   },
   (table) => [
     uniqueIndex("tags_project_lower_name_idx").on(table.projectId, sql`lower(${table.name})`),

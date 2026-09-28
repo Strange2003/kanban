@@ -19,6 +19,8 @@ const SPEC_MATRIX: Record<Permission, [boolean, boolean, boolean]> = {
   "workItem:edit": [true, true, false],
   "workItem:comment": [true, true, true],
   "relationship:edit": [true, true, false],
+  // 013-project-catalogs FR-007.
+  "catalog:manage": [true, true, false],
 };
 
 const ROLES: ProjectRole[] = ["owner", "member", "viewer"];

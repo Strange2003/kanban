@@ -279,3 +279,17 @@ export async function inviteAndAccept(
 
   await ownerPage.reload();
 }
+
+/**
+ * 013-project-catalogs FR-014: creates a tag, area or size from a Work Item
+ * field through its "Create new" pop-up — type the name in the field first.
+ * `color` is a palette label ("Blue"), tags only.
+ */
+export async function createFromField(page: Page, name: string, color?: string) {
+  await page.getByRole("button", { name: `Create new "${name}"` }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  if (color) await dialog.getByRole("radio", { name: color, exact: true }).click();
+  await dialog.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(dialog).toBeHidden();
+}

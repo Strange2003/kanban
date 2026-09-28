@@ -87,7 +87,7 @@ const baseWorkItem = {
   priority: null,
   severity: null,
   areaId: null,
-  iterationId: null,
+  sizeId: null,
   startDate: null,
   targetDate: null,
   closedAt: null,
@@ -279,13 +279,42 @@ describe("updateWorkItem — extended fields", () => {
     expect(activityFields()).toEqual({ area: { from: null, to: "Frontend" } });
   });
 
-  it("creates a missing iteration in the Work Item's own project (FR-021)", async () => {
-    fake.returning.iterations = [[{ id: 3, name: "Sprint 1" }]];
+  it("creates a missing size in the Work Item's own project, at the end of its catalog (FR-021)", async () => {
+    fake.returning.sizes = [[{ id: 3, name: "M" }]];
 
-    await updateWorkItem({ workItemId: 10, iterationName: " Sprint 1 " });
+    await updateWorkItem({ workItemId: 10, sizeName: " M " });
 
-    expect(writesTo("iterations")[0]?.values).toEqual({ projectId: 1, name: "Sprint 1" });
-    expect(writesTo("work_items")[0]?.values).toMatchObject({ iterationId: 3 });
+    // `position` is a max()+1 subquery (FR-003a of 013-project-catalogs).
+    expect(writesTo("sizes")[0]?.values).toMatchObject({ projectId: 1, name: "M" });
+    expect(writesTo("sizes")[0]?.values).toHaveProperty("position");
+    expect(writesTo("work_items")[0]?.values).toMatchObject({ sizeId: 3 });
+    // 013-project-catalogs: logged under `size`, which the history shows as "Size".
+    expect(activityFields()).toEqual({ size: { from: null, to: "M" } });
+  });
+
+  it("creates a missing tag gray by default (FR-009 of 013-project-catalogs)", async () => {
+    fake.returning.tags = [[{ id: 5, name: "backend" }]];
+
+    await updateWorkItem({ workItemId: 10, tagNames: ["backend"] });
+
+    expect(writesTo("tags")[0]?.values).toMatchObject({ projectId: 1, name: "backend", color: "gray" });
+    expect(writesTo("work_item_tags").at(-1)?.values).toEqual([{ workItemId: 10, tagId: 5 }]);
+  });
+
+  it("with createMissingCatalogValues: false, rejects a deleted tag instead of recreating it (013 research.md)", async () => {
+    const result = await updateWorkItem({ workItemId: 10, tagNames: ["UX"], createMissingCatalogValues: false });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "CATALOG_VALUE_NOT_FOUND" } });
+    expect(result.ok === false && result.error.message).toContain('"UX"');
+    expect(writesTo("tags")).toEqual([]);
+    expect(writesTo("work_item_tags")).toEqual([]);
+  });
+
+  it("with createMissingCatalogValues: false, rejects a deleted size", async () => {
+    const result = await updateWorkItem({ workItemId: 10, sizeName: "XL", createMissingCatalogValues: false });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "CATALOG_VALUE_NOT_FOUND" } });
+    expect(writesTo("sizes")).toEqual([]);
   });
 
   it("treats a blank area name as clearing the area", async () => {
