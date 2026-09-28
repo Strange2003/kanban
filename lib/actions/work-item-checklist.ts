@@ -192,13 +192,17 @@ export async function removeChecklistItem(
 
 // Reordering is deliberately NOT written to the history: it changes no content,
 // only presentation, and a burst of moves would bury the entries that matter.
+// One step up/down (the detail view's arrows) or straight to a 0-based
+// position (MCP's move_checklist_item); a position past the end means last.
 export async function moveChecklistItem(
-  input: Target & { itemPublicId: string; direction: "up" | "down" },
+  input: Target & { itemPublicId: string } & ({ direction: "up" | "down" } | { toPosition: number }),
 ): Promise<Result<ChecklistItemView[]>> {
   return runAction(async () => {
     const { project, workItem } = await resolveTarget(input);
-    if (input.direction !== "up" && input.direction !== "down")
-      throw new AppError("INVALID_CHECKLIST_ITEM", "Invalid direction.");
+    const toPosition = "toPosition" in input ? input.toPosition : undefined;
+    const direction = "direction" in input ? input.direction : undefined;
+    if (toPosition !== undefined ? !Number.isInteger(toPosition) || toPosition < 0 : direction !== "up" && direction !== "down")
+      throw new AppError("INVALID_CHECKLIST_ITEM", "Invalid position.");
 
     const ordered = await db.transaction(async (tx) => {
       await lockWorkItem(tx, workItem.id);
@@ -209,8 +213,9 @@ export async function moveChecklistItem(
         .orderBy(asc(workItemChecklistItems.position), asc(workItemChecklistItems.id));
       const index = items.findIndex((item) => item.publicId === input.itemPublicId);
       if (index === -1) throw new AppError("NOT_FOUND", "Checklist item not found.");
-      const target = input.direction === "up" ? index - 1 : index + 1;
-      if (target >= 0 && target < items.length) {
+      const target =
+        toPosition !== undefined ? Math.min(toPosition, items.length - 1) : direction === "up" ? index - 1 : index + 1;
+      if (target !== index && target >= 0 && target < items.length) {
         const [moved] = items.splice(index, 1);
         items.splice(target, 0, moved!);
         // Renumber the whole list so ties can never survive a move.

@@ -16,6 +16,7 @@ import { resolveWorkItem } from "@/lib/mcp/resolve";
 import { unwrap } from "@/lib/mcp/result";
 import { DEFAULT_SEARCH_LIMIT, MAX_SEARCH_LIMIT, searchRows } from "@/lib/mcp/search";
 import { describeWorkItemActivity } from "@/lib/work-item-activity";
+import { checklistOutput } from "@/lib/mcp/tools/checklist";
 import { DEFAULT_TAG_COLOR } from "@/lib/tag-colors";
 import type { AssigneeView } from "@/lib/work-item-view";
 
@@ -68,7 +69,9 @@ export function registerReadTools(server: McpServer) {
       title: "Get a project's board",
       description:
         "Returns the project's board: its columns in order (isClosing = Work Items there count as closed) and, " +
-        "per column, its Work Items in order with ID, title, assignee, priority, target date, state and tags.",
+        "per column, its Work Items in order with ID, title, assignee, priority, target date, state and tags. " +
+        "Like the board in the app, it leaves out Work Items closed for more than 14 days: each column's " +
+        "hiddenClosedCount says how many; find them with search_work_items (state: \"closed\").",
       inputSchema: z.strictObject({ projectId }),
       annotations: READ_ONLY,
     },
@@ -80,6 +83,8 @@ export function registerReadTools(server: McpServer) {
           columnId: stage.publicId,
           name: stage.name,
           isClosing: stage.isClosing,
+          // KAN-7: closed for more than 14 days, left out of workItems below.
+          hiddenClosedCount: stage.hiddenClosedCount,
           workItems: board.workItems
             .filter((wi) => wi.stageId === stage.id)
             .map((wi) => ({
@@ -154,8 +159,8 @@ export function registerReadTools(server: McpServer) {
     {
       title: "Get a Work Item",
       description:
-        "Returns every field of one Work Item, its parent, children and related Work Items, and its history " +
-        "(who changed what, and whether it was through an agent).",
+        "Returns every field of one Work Item, its parent, children and related Work Items, its checklist " +
+        "(steps with their checklistItemId) and its history (who changed what, and whether it was through an agent).",
       inputSchema: z.strictObject({ projectId, workItemId }),
       annotations: READ_ONLY,
     },
@@ -186,6 +191,7 @@ export function registerReadTools(server: McpServer) {
         parent: detail.relations.parent ? ref(detail.relations.parent) : null,
         children: detail.relations.children.map(ref),
         related: detail.relations.related.map(ref),
+        checklist: checklistOutput(detail.checklist),
         activity: detail.activity.map((entry) => ({
           at: entry.createdAt,
           type: entry.type,
