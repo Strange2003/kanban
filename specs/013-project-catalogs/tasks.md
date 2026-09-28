@@ -239,7 +239,7 @@ herramientas MCP y la documentación; el historial antiguo se lee como Size.
 - [X] T044 Correr `npm run test:e2e` **solo tras confirmar con el product owner** que la base de `.env.local` es la Neon `dev` desechable.
 - [ ] T045 Revisión manual de UX en escritorio y a 390 px: sidebar con "Tags" anidado (también en el drawer móvil), pantalla de catálogos, línea de colores en modo claro y oscuro, y el pop-up.
 - [X] T046 Actualizar `AGENTS.md` § Current state of the codebase y `README.md` § Project Status con 013 (catálogos gestionables, color de tags, Size en lugar de Iteration, clave `catalog:manage`, y que las tags ya no se crean inline en `updateWorkItem` desde la UI).
-- [ ] T047 Deploy (AGENTS.md): aplicar `0008` a la rama Neon de **producción** con confirmación del product owner, **antes** de hacer push a `main`; luego merge y push, y verificar el deploy de Render. Ventana corta de errores aceptada por el product owner (research.md § Migración `0008`).
+- [X] T047 Deploy (AGENTS.md): aplicar `0008` a la rama Neon de **producción** con confirmación del product owner, **antes** de hacer push a `main`; luego merge y push, y verificar el deploy de Render. Ventana corta de errores aceptada por el product owner (research.md § Migración `0008`).
 - [ ] T048 Pasada manual completa de [quickstart.md](quickstart.md), bloques 1 a 6.
 
 ---

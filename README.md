@@ -247,7 +247,7 @@ This project follows **Spec-Driven Development** with [Spec Kit](https://github.
 - ✅ **Phase 3 (planning & views)** — extended fields and closing columns ([`008`](specs/008-work-item-fields/)), List and Table views ([`009`](specs/009-work-item-views/))
 - ✅ **Legal pages** ([`010`](specs/010-legal-pages/)) — `/privacy` and `/terms`; Google sign-in published for everyone
 - ✅ **Phase 4 so far** — AI agent access over MCP + Work Item assignee ([`011`](specs/011-agent-access-mcp/)); collaborative Work Item detail with comments, time tracking and History tab ([`012`](specs/012-work-item-discussion/)); per-project catalogs — tags with color, areas and sizes, with Size replacing Iteration ([`013`](specs/013-project-catalogs/))
-- ✅ **Deployment** — the first instance runs on Render against its own production Neon branch, migrated through `0007`
+- ✅ **Deployment** — the first instance runs on Render against its own production Neon branch, migrated through `0008`
 
 Still open: the manual quickstart passes of 007 (T057), 008 (T052), 009 (T028) and 011 (T057 — end-to-end check with a real MCP client).
 
