@@ -52,6 +52,8 @@ export function stageColumn(page: Page, name: string): Locator {
 export async function createProjectViaUi(page: Page, name: string): Promise<string> {
   await page.getByRole("button", { name: "New project" }).click();
   await page.getByLabel("Name").fill(name);
+  // Most specs build their own columns, so they start from the Blank template (KAN-5).
+  await page.getByText("Blank", { exact: true }).click();
   await page.getByRole("button", { name: "Create project" }).click();
   await expect(page).toHaveURL(/\/projects\/.+/);
   return page.url();

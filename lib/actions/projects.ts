@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { and, desc, eq, ilike, inArray, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
-import { projects, projectMembers } from "@/db/schema";
+import { projects, projectMembers, stages } from "@/db/schema";
 import { user } from "@/db/auth-schema";
 import { getSession } from "@/lib/auth";
 import { getActor } from "@/lib/actor";
@@ -12,6 +12,7 @@ import { logUnassignOnMemberExitWithinTx } from "@/lib/work-item-assignee";
 import { requireProjectMember, requireProjectPermission } from "@/lib/permissions";
 import { ASSIGNABLE_ROLES, type AssignableRole, type ProjectRole } from "@/lib/roles";
 import { generatePublicId, deriveWorkItemPrefix } from "@/lib/ids";
+import { DEFAULT_PROJECT_TEMPLATE_KEY, getProjectTemplate, isProjectTemplateKey } from "@/lib/project-templates";
 import { AppError, runAction, type Result } from "@/lib/errors";
 
 export type ProjectWithMemberCount = typeof projects.$inferSelect & { memberCount: number };
@@ -38,6 +39,8 @@ async function generateUniqueWorkItemPrefix(name: string): Promise<string> {
 export async function createProject(input: {
   name: string;
   description?: string;
+  // KAN-5: a key from lib/project-templates.ts; columns come from there, never from the client.
+  templateKey?: string;
 }): Promise<Result<typeof projects.$inferSelect>> {
   return runAction(async () => {
     const session = await getSession();
@@ -47,6 +50,12 @@ export async function createProject(input: {
     if (!parsed.success) {
       throw new AppError("NAME_REQUIRED", parsed.error.issues[0]?.message ?? "Project name is required.");
     }
+
+    const templateKey = input.templateKey ?? DEFAULT_PROJECT_TEMPLATE_KEY;
+    if (!isProjectTemplateKey(templateKey)) {
+      throw new AppError("INVALID_TEMPLATE", "Unknown project template.");
+    }
+    const template = getProjectTemplate(templateKey);
 
     const publicId = generatePublicId();
     const workItemPrefix = await generateUniqueWorkItemPrefix(parsed.data.name);
@@ -70,6 +79,21 @@ export async function createProject(input: {
         userId: session.user.id,
         role: "owner",
       });
+
+      // KAN-5: the template's columns, in the same transaction. The project is
+      // brand new, so positions start at 0 and no Work Item exists yet — a
+      // closing column needs no closed_at bookkeeping.
+      if (template.columns.length > 0) {
+        await tx.insert(stages).values(
+          template.columns.map((column, position) => ({
+            publicId: generatePublicId(),
+            projectId: created.id,
+            name: column.name,
+            position,
+            isClosing: column.isClosing ?? false,
+          })),
+        );
+      }
 
       return created;
     });
