@@ -21,6 +21,7 @@ import { requireProjectMember, requireProjectPermission } from "@/lib/permission
 import { AppError, runAction, type Result } from "@/lib/errors";
 import { getWorkItemAndProject } from "@/lib/work-item-queries";
 import { resolveCatalogValue } from "@/lib/work-item-catalogs";
+import { TAG_COLORS, type TagColor } from "@/lib/tag-colors";
 import { WORK_ITEM_LEVELS, type WorkItemLevel } from "@/lib/work-item-fields";
 import { nextClosedAt } from "@/lib/work-item-closing";
 import { setAssigneeWithinTx, translateAssigneeFkError } from "@/lib/work-item-assignee";
@@ -164,6 +165,17 @@ const workItemFieldsSchema = z.object({
   // save time means someone deleted it, and it must not silently come back.
   // AI agents keep the default ("new names are created", FR-021 of 013).
   createMissingCatalogValues: z.boolean().optional(),
+  // 014-board-filters-mcp-catalogs FR-016: the color of a tag this call
+  // CREATES, keyed by its name; an existing tag keeps its color. Keys are
+  // matched case-insensitively, like the catalog.
+  newTagColors: z
+    .record(z.string(), z.enum(TAG_COLORS, { error: `Tag colors are: ${TAG_COLORS.join(", ")}.` }))
+    .optional()
+    .transform((colors) =>
+      colors === undefined
+        ? undefined
+        : Object.fromEntries(Object.entries(colors).map(([name, color]) => [name.trim().toLowerCase(), color])),
+    ),
 });
 type WorkItemFields = z.infer<typeof workItemFieldsSchema>;
 type ProjectRow = typeof projects.$inferSelect;
@@ -181,6 +193,7 @@ export type WorkItemFieldsInput = {
   startDate?: string | null;
   targetDate?: string | null;
   createMissingCatalogValues?: boolean;
+  newTagColors?: Record<string, TagColor>;
 };
 
 const createWorkItemSchema = z.object({
@@ -574,7 +587,10 @@ async function applyWorkItemFieldsWithinTx(
     if (JSON.stringify(currentNames) !== JSON.stringify(nextNames)) {
       const resolvedTagIds: number[] = [];
       for (const name of nextNames) {
-        const tag = await resolveCatalogValue(tx, "tag", project.id, name, { create: createMissing });
+        const tag = await resolveCatalogValue(tx, "tag", project.id, name, {
+          create: createMissing,
+          color: data.newTagColors?.[name.toLowerCase()],
+        });
         // Throwing rolls back the whole transaction, so nothing is written.
         if (!tag) throw missingCatalogValue(name);
         resolvedTagIds.push(tag.id);

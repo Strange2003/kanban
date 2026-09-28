@@ -14,7 +14,7 @@ import { parseViewQuery, serializeViewQuery, type ViewQuery } from "@/lib/work-i
  * instead of undoing filter by filter (research.md § Filtros y orden).
  */
 export function useViewQuery(
-  view: "list" | "table",
+  view: "list" | "table" | "board",
   validStagePublicIds: ReadonlySet<string>,
 ): [ViewQuery, (next: ViewQuery) => void] {
   const searchParams = useSearchParams();

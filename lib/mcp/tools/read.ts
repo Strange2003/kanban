@@ -37,7 +37,7 @@ export function registerReadTools(server: McpServer) {
       description:
         "Lists every project the user belongs to — personal (only them) and shared (with others) — with the " +
         "user's role in each (owner, member or viewer; a viewer can only read). Call this first to get a projectId.",
-      inputSchema: z.object({}),
+      inputSchema: z.strictObject({}),
       annotations: READ_ONLY,
     },
     async () => {
@@ -69,7 +69,7 @@ export function registerReadTools(server: McpServer) {
       description:
         "Returns the project's board: its columns in order (isClosing = Work Items there count as closed) and, " +
         "per column, its Work Items in order with ID, title, assignee, priority, target date, state and tags.",
-      inputSchema: z.object({ projectId }),
+      inputSchema: z.strictObject({ projectId }),
       annotations: READ_ONLY,
     },
     async ({ projectId }) => {
@@ -106,7 +106,7 @@ export function registerReadTools(server: McpServer) {
         "Finds Work Items in a project. `text` matches the title or description (case-insensitive) or an exact ID; " +
         'assigneeIds takes memberIds from list_members plus "unassigned" and "me"; filters combine with AND. ' +
         "Use it to check what already exists before creating. Paginated: follow nextOffset until it is null.",
-      inputSchema: z.object({
+      inputSchema: z.strictObject({
         projectId,
         text: z.string().optional(),
         assigneeIds: z.array(z.string().min(1)).optional(),
@@ -156,7 +156,7 @@ export function registerReadTools(server: McpServer) {
       description:
         "Returns every field of one Work Item, its parent, children and related Work Items, and its history " +
         "(who changed what, and whether it was through an agent).",
-      inputSchema: z.object({ projectId, workItemId }),
+      inputSchema: z.strictObject({ projectId, workItemId }),
       annotations: READ_ONLY,
     },
     async ({ projectId, workItemId }) => {
@@ -205,7 +205,7 @@ export function registerReadTools(server: McpServer) {
       description:
         "Lists the people in a project with their memberId (use it to assign Work Items) and role. " +
         "Emails are included only if the user's role can see them in the app.",
-      inputSchema: z.object({ projectId }),
+      inputSchema: z.strictObject({ projectId }),
       annotations: READ_ONLY,
     },
     async ({ projectId }) => {

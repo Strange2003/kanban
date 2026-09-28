@@ -162,14 +162,23 @@ export function parseViewQuery(params: URLSearchParams, validStagePublicIds: Rea
   };
 }
 
+/** The address parameters the board keeps — shared with List/Table (014-board-filters-mcp-catalogs FR-010). */
+export const BOARD_QUERY_KEYS = ["assignee", "tag"] as const;
+
 /**
  * The inverse of parseViewQuery, without the leading "?". Default values are
  * omitted so an unfiltered view has a clean address; the List has no sort, so
  * `sort`/`dir` are left out there.
  */
-export function serializeViewQuery(query: ViewQuery, view: "list" | "table"): string {
+export function serializeViewQuery(query: ViewQuery, view: "list" | "table" | "board"): string {
   const params = new URLSearchParams();
   const appendAll = (key: string, values: string[]) => values.forEach((v) => params.append(key, v));
+  // The board only has the assignee and tag filters (014-board-filters-mcp-catalogs FR-010).
+  if (view === "board") {
+    appendAll("assignee", query.assignees);
+    appendAll("tag", query.tags);
+    return params.toString();
+  }
   if (query.status) params.set("status", query.status);
   appendAll("stage", query.stages);
   appendAll("priority", query.priorities);
@@ -219,6 +228,28 @@ function matchesAssignee(selected: string[], userId: string | null, currentUserI
   });
 }
 
+/**
+ * The assignee and tag filters (FR-007 of 009, FR-008 of 011), shared by
+ * filterWorkItems and the board (FR-004 of 014-board-filters-mcp-catalogs) so
+ * the three views can't drift apart: values in one filter combine with OR,
+ * the two filters with AND; tags compare case-insensitively; "none" matches an
+ * empty field and "me" the viewer.
+ */
+export function matchesAssigneeAndTags(
+  item: { assigneeUserId: string | null; tagNames: string[] },
+  query: Pick<ViewQuery, "assignees" | "tags">,
+  currentUserId: string | null,
+): boolean {
+  if (query.tags.length) {
+    const tagNone = query.tags.some((t) => t.toLowerCase() === NONE);
+    const wanted = query.tags.filter((t) => t.toLowerCase() !== NONE).map((t) => t.toLowerCase());
+    const itemTags = item.tagNames.map((t) => t.toLowerCase());
+    if (!((tagNone && itemTags.length === 0) || wanted.some((t) => itemTags.includes(t)))) return false;
+  }
+  if (query.assignees.length && !matchesAssignee(query.assignees, item.assigneeUserId, currentUserId)) return false;
+  return true;
+}
+
 function matchesLevel(selected: LevelFilter[], value: WorkItemLevel | null): boolean {
   if (selected.length === 0) return true;
   return selected.some((s) => (s === NONE ? value === null : s === value));
@@ -239,8 +270,6 @@ export function filterWorkItems(
 ): WorkItemViewRow[] {
   if (query.overdue && today === null) return [];
   const q = query.q.toLowerCase();
-  const tagNone = query.tags.some((t) => t.toLowerCase() === NONE);
-  const tagNames = query.tags.filter((t) => t.toLowerCase() !== NONE).map((t) => t.toLowerCase());
 
   return rows.filter((row) => {
     if (query.status === "open" && row.isClosed) return false;
@@ -250,12 +279,7 @@ export function filterWorkItems(
     if (!matchesLevel(query.severities, row.severity)) return false;
     if (!matchesName(query.areas, row.areaName)) return false;
     if (!matchesName(query.sizes, row.sizeName)) return false;
-    if (query.tags.length) {
-      const rowTags = row.tags.map((t) => t.toLowerCase());
-      const ok = (tagNone && rowTags.length === 0) || tagNames.some((t) => rowTags.includes(t));
-      if (!ok) return false;
-    }
-    if (query.assignees.length && !matchesAssignee(query.assignees, row.assignee?.userId ?? null, currentUserId)) {
+    if (!matchesAssigneeAndTags({ assigneeUserId: row.assignee?.userId ?? null, tagNames: row.tags }, query, currentUserId)) {
       return false;
     }
     if (query.overdue && !isOverdue(row.targetDate, row.closedAt, today!)) return false;

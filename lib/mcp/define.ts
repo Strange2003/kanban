@@ -10,6 +10,10 @@ import { runTool, toolError } from "@/lib/mcp/result";
  * runs as the agent's user through lib/actor.ts (set by app/api/mcp/route.ts),
  * and converts Server Action results and errors via runTool. `openWorldHint`
  * is always false: the tools only touch this instance's data.
+ *
+ * Build every input object — nested ones too — with `z.strictObject`, so an
+ * unknown field is rejected by name instead of silently dropped (FR-021 of
+ * 014-board-filters-mcp-catalogs); tests/unit/mcp-route.test.ts enforces it.
  */
 export function defineTool<Schema extends z.ZodObject>(
   server: McpServer,

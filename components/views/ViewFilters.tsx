@@ -17,12 +17,12 @@ import { cn } from "@/lib/utils";
 import { TAG_COLOR_STYLES, type TagColor } from "@/lib/tag-colors";
 
 // `color`: a tag's palette color, shown as a dot (FR-019 of 013-project-catalogs).
-type Choice = { value: string; label: string; color?: TagColor };
+export type Choice = { value: string; label: string; color?: TagColor };
 
 // One multi-value filter (FR-007): a button that opens a small panel of
 // checkboxes. Values inside it combine with OR; Escape or a click outside
 // closes it and returns focus to its button.
-function MultiSelectFilter({
+export function MultiSelectFilter({
   label,
   choices,
   selected,
@@ -127,6 +127,17 @@ const levelChoices = withNone(
 const nameChoices = (names: string[]) =>
   withNone(names.map((n) => ({ value: n, label: n })));
 
+// The Assignee filter's choices, shared with the board (FR-008 of 011, FR-002 of 014).
+export const assigneeChoices = (members: WorkItemViewOptions["members"]): Choice[] => [
+  { value: ME, label: "Assigned to me" },
+  ...members.map((m) => ({ value: m.userId, label: m.name })),
+  { value: NONE, label: "Unassigned" },
+];
+
+// The Tag filter's choices: the catalog in its manual order, with colors (FR-019 of 013, FR-003 of 014).
+export const tagChoices = (tags: WorkItemViewOptions["tags"]): Choice[] =>
+  withNone(tags.map((t) => ({ value: t.name, label: t.name, color: t.color })));
+
 // FR-007/FR-008 of 009-work-item-views: the filter bar shared by the List and
 // the Table. It only reports a new query; the caller writes it to the address.
 export function ViewFilters({
@@ -201,15 +212,11 @@ export function ViewFilters({
         remove: () => set({ [key]: values.filter((v) => v !== value) }),
       });
   }
-  const assigneeChoices = [
-    { value: ME, label: "Assigned to me" },
-    ...options.members.map((m) => ({ value: m.userId, label: m.name })),
-    { value: NONE, label: "Unassigned" },
-  ];
+  const assigneeOptions = assigneeChoices(options.members);
   for (const value of query.assignees)
     activeFilters.push({
       key: `assignee-${value}`,
-      label: `Assignee: ${assigneeChoices.find((c) => c.value === value)?.label ?? value}`,
+      label: `Assignee: ${assigneeOptions.find((c) => c.value === value)?.label ?? value}`,
       remove: () => set({ assignees: query.assignees.filter((v) => v !== value) }),
     });
   if (query.overdue)
@@ -262,7 +269,7 @@ export function ViewFilters({
         {/* FR-008 of 011-agent-access-mcp. */}
         <MultiSelectFilter
           label="Assignee"
-          choices={assigneeChoices}
+          choices={assigneeOptions}
           selected={query.assignees}
           onChange={(assignees) => set({ assignees })}
         />
@@ -335,7 +342,7 @@ export function ViewFilters({
           />
           <MultiSelectFilter
             label="Tag"
-            choices={withNone(options.tags.map((t) => ({ value: t.name, label: t.name, color: t.color })))}
+            choices={tagChoices(options.tags)}
             selected={query.tags}
             onChange={(tags) => set({ tags })}
           />

@@ -28,6 +28,7 @@ Existing self-hostable alternatives (Kan.bn, Kaneo, Vikunja, Planka, WeKan, Kanb
 - One Kanban board per project. Columns ("stages") can be created, renamed, deleted and reordered by drag-and-drop.
 - Work Items are dragged between and within columns; on mobile, columns scroll sideways and each card has a "Move to column" control.
 - Any column can be marked as a **closing column** (e.g. "Done"): Work Items in it are closed; they reopen when they leave it.
+- **Filters** by assignee ("Assigned to me", any member, unassigned) and by tag: non-matching cards hide, every column stays, and each column shows how many cards are visible. Filters live in the URL and carry over to List and Table.
 
 **Work Items**
 - A short, human-readable ID per project (e.g. `KAN-42`), title and plain-text description.
@@ -99,14 +100,19 @@ On first use the assistant opens the browser: you sign in (Google or email) and 
 | Read | `list_projects`, `list_members`, `get_board`, `get_work_item`, `search_work_items` |
 | Work Items | `create_work_items` (up to 50 at once), `update_work_item` (fields, assignee), `move_work_item`, `set_parent`, `link_related`, `delete_work_item` |
 | Columns | `create_column`, `rename_column`, `reorder_columns`, `set_column_closing`, `delete_column` |
+| Catalogs | `list_catalogs` (tags with color, areas and sizes, in the project's order), `set_tag_color` |
+
+When creating or editing Work Items, a tag can be a name or `{ "name": "Mobile", "color": "green" }` — the color applies only if the tag is new (an existing tag keeps its color; use `set_tag_color`). Every tool rejects fields it doesn't know, naming them, instead of silently ignoring them.
+
+> MCP clients cache the tool list. After updating your instance, **reconnect the connector** (or restart the assistant) to see new tools.
 
 Guarantees:
 - It acts **as you**, with exactly your role in each project — a Viewer's agent can only read.
-- It **can't** invite or remove people, change roles, or rename/delete/leave projects.
+- It **can't** invite or remove people, change roles, or rename/delete/leave projects — nor rename, reorder or delete tags, areas and sizes (deleting affects every Work Item, so a person does it).
 - Every change it makes appears in the Work Item's History as "by *you* via *agent*".
 - **Settings → Connected agents** (the robot icon in the header) lists every authorized agent and revokes one immediately.
 
-Design and decisions: [`specs/011-agent-access-mcp`](specs/011-agent-access-mcp/).
+Design and decisions: [`specs/011-agent-access-mcp`](specs/011-agent-access-mcp/) and, for catalogs, [`specs/014-board-filters-mcp-catalogs`](specs/014-board-filters-mcp-catalogs/).
 
 ## Tech stack
 
@@ -246,7 +252,7 @@ This project follows **Spec-Driven Development** with [Spec Kit](https://github.
 - ✅ **Phase 2 (depth)** — relationships ([`005`](specs/005-work-item-relationships/)), detail view ([`006`](specs/006-work-item-detail-view/)), roles & permissions ([`007`](specs/007-roles-permissions/))
 - ✅ **Phase 3 (planning & views)** — extended fields and closing columns ([`008`](specs/008-work-item-fields/)), List and Table views ([`009`](specs/009-work-item-views/))
 - ✅ **Legal pages** ([`010`](specs/010-legal-pages/)) — `/privacy` and `/terms`; Google sign-in published for everyone
-- ✅ **Phase 4 so far** — AI agent access over MCP + Work Item assignee ([`011`](specs/011-agent-access-mcp/)); collaborative Work Item detail with comments, time tracking and History tab ([`012`](specs/012-work-item-discussion/)); per-project catalogs — tags with color, areas and sizes, with Size replacing Iteration ([`013`](specs/013-project-catalogs/))
+- ✅ **Phase 4 so far** — AI agent access over MCP + Work Item assignee ([`011`](specs/011-agent-access-mcp/)); collaborative Work Item detail with comments, time tracking and History tab ([`012`](specs/012-work-item-discussion/)); per-project catalogs — tags with color, areas and sizes, with Size replacing Iteration ([`013`](specs/013-project-catalogs/)); board filters by assignee and tags, and catalogs for AI agents ([`014`](specs/014-board-filters-mcp-catalogs/))
 - ✅ **Deployment** — the first instance runs on Render against its own production Neon branch, migrated through `0008`
 
 Still open: the manual quickstart passes of 007 (T057), 008 (T052), 009 (T028) and 011 (T057 — end-to-end check with a real MCP client).
@@ -272,6 +278,7 @@ Still open: the manual quickstart passes of 007 (T057), 008 (T052), 009 (T028) a
 11. AI agent access (MCP) + Work Item assignee ✅
 12. Work Item discussion, time tracking and detail layout ✅
 13. Per-project catalogs: tags with color, areas and sizes (Size replaces Iteration) ✅
+14. Board filters (assignee, tags) + catalogs over MCP ✅
 
 Candidates *(not yet confirmed in scope — each goes through `/speckit-specify` first)*:
 - Calendar view (Work Items already store start, target and closing dates)

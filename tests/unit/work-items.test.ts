@@ -301,6 +301,33 @@ describe("updateWorkItem — extended fields", () => {
     expect(writesTo("work_item_tags").at(-1)?.values).toEqual([{ workItemId: 10, tagId: 5 }]);
   });
 
+  // 014-board-filters-mcp-catalogs FR-016: a color only for a tag this call creates.
+  it("creates a missing tag with the color given for it, matched case-insensitively", async () => {
+    fake.returning.tags = [[{ id: 5, name: "Mobile" }]];
+
+    await updateWorkItem({ workItemId: 10, tagNames: ["Mobile"], newTagColors: { MOBILE: "green" } });
+
+    expect(writesTo("tags")[0]?.values).toMatchObject({ projectId: 1, name: "Mobile", color: "green" });
+  });
+
+  it("assigns an existing tag without recoloring it", async () => {
+    await useFakeDb({ work_items: [baseWorkItem], projects: [PROJECT], project_members: [MEMBER], tags: [{ id: 7, name: "Bug" }] });
+
+    await updateWorkItem({ workItemId: 10, tagNames: ["bug"], newTagColors: { bug: "blue" } });
+
+    expect(writesTo("tags")).toEqual([]);
+    expect(writesTo("work_item_tags").at(-1)?.values).toEqual([{ workItemId: 10, tagId: 7 }]);
+  });
+
+  it("rejects a tag color outside the palette with VALIDATION_ERROR and writes nothing", async () => {
+    // @ts-expect-error — not a palette color, as a direct request could send
+    const result = await updateWorkItem({ workItemId: 10, tagNames: ["Mobile"], newTagColors: { mobile: "purple" } });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
+    expect(writesTo("tags")).toEqual([]);
+    expect(writesTo("work_item_tags")).toEqual([]);
+  });
+
   it("with createMissingCatalogValues: false, rejects a deleted tag instead of recreating it (013 research.md)", async () => {
     const result = await updateWorkItem({ workItemId: 10, tagNames: ["UX"], createMissingCatalogValues: false });
 

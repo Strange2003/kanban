@@ -136,7 +136,13 @@ No existen herramientas para:
 - Renombrar, editar la descripción, eliminar o salir de un proyecto.
 - Responder invitaciones o leer notificaciones.
 
-`tests/unit/mcp-tools.test.ts` fija la lista exacta de nombres registrados,
+> **014-board-filters-mcp-catalogs** agregó `list_catalogs` (lectura) y
+> `set_tag_color` (escritura), tags `{ name, color }` y entradas estrictas en
+> todas las herramientas; ver
+> [014 contracts](../../014-board-filters-mcp-catalogs/contracts/board-filters-mcp-catalogs.md).
+> Renombrar, reordenar y eliminar valores de catálogo siguen excluidos.
+
+`tests/unit/mcp-route.test.ts` fija la lista exacta de nombres registrados,
 así que agregar una herramienta requiere cambiar ese test **y** este
 contrato.
 

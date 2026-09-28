@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { getBoard } from "@/lib/actions/board";
 import { Board } from "@/components/board/Board";
+import { BoardSkeleton } from "@/components/board/BoardSkeleton";
 import { ProjectViewHeader } from "@/components/views/ProjectViewHeader";
 
 export default async function ProjectBoardPage({
@@ -23,12 +24,19 @@ export default async function ProjectBoardPage({
       <Suspense>
         <ProjectViewHeader projectPublicId={projectPublicId} projectName={result.data.projectName} role={result.data.role} active="board" />
       </Suspense>
-      <Board
-        projectPublicId={projectPublicId}
-        role={result.data.role}
-        initialStages={result.data.stages}
-        initialWorkItems={result.data.workItems}
-      />
+      {/* 014-board-filters-mcp-catalogs: the filters read the address with
+          useSearchParams — wrapped per use-search-params.md § Prerendering. */}
+      <Suspense fallback={<BoardSkeleton />}>
+        <Board
+          projectPublicId={projectPublicId}
+          role={result.data.role}
+          initialStages={result.data.stages}
+          initialWorkItems={result.data.workItems}
+          currentUserId={result.data.currentUserId}
+          members={result.data.members}
+          tagCatalog={result.data.tagCatalog}
+        />
+      </Suspense>
     </div>
   );
 }
