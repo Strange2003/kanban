@@ -34,3 +34,15 @@ describe("describeWorkItemActivity — 013-project-catalogs", () => {
     expect(describeWorkItemActivity(edited({ tags: { from: [], to: ["UX"] } }))).toBe("Edited tags");
   });
 });
+
+describe("describeWorkItemActivity — KAN-9 checklist", () => {
+  const item = (type: string, payload: unknown) => describeWorkItemActivity({ type, payload });
+
+  it("names the step for every checklist event", () => {
+    expect(item("checklist_item_added", { text: "Write tests" })).toBe('Checklist step added: "Write tests"');
+    expect(item("checklist_item_checked", { text: "Write tests" })).toBe('Checklist step completed: "Write tests"');
+    expect(item("checklist_item_unchecked", { text: "Write tests" })).toBe('Checklist step reopened: "Write tests"');
+    expect(item("checklist_item_removed", { text: "Write tests" })).toBe('Checklist step removed: "Write tests"');
+    expect(item("checklist_item_edited", { from: "A", to: "B" })).toBe('Checklist step edited: "A" → "B"');
+  });
+});

@@ -94,6 +94,15 @@ export function describeWorkItemActivity(
   if (entry.type === "comment_added") return "Comment added";
   if (entry.type === "time_entry_added") return "Time logged";
   if (entry.type === "time_entry_deleted") return "Time entry removed";
+  if (entry.type.startsWith("checklist_item_")) {
+    const p = entry.payload as { text?: string; from?: string; to?: string } | null;
+    const quote = (value: string | undefined) => (value ? ` "${value}"` : "");
+    if (entry.type === "checklist_item_added") return `Checklist step added:${quote(p?.text)}`;
+    if (entry.type === "checklist_item_checked") return `Checklist step completed:${quote(p?.text)}`;
+    if (entry.type === "checklist_item_unchecked") return `Checklist step reopened:${quote(p?.text)}`;
+    if (entry.type === "checklist_item_removed") return `Checklist step removed:${quote(p?.text)}`;
+    if (entry.type === "checklist_item_edited") return `Checklist step edited:${quote(p?.from)} →${quote(p?.to)}`;
+  }
   if (entry.type === "parent_linked") return "Linked to a parent Work Item";
   if (entry.type === "parent_unlinked") return "Unlinked from its parent Work Item";
   if (entry.type === "related_linked") return "Linked to a related Work Item";

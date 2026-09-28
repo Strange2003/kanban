@@ -17,8 +17,9 @@ import {
   type WorkItemActivityEntry,
 } from "@/lib/actions/work-items";
 import type { AssigneeView } from "@/lib/work-item-view";
-import { getWorkItemAndProject, workItemIsAncestorOf } from "@/lib/work-item-queries";
+import { getWorkItemAndProject, listWorkItemChecklist, workItemIsAncestorOf } from "@/lib/work-item-queries";
 import { listCatalog } from "@/lib/work-item-catalogs";
+import type { ChecklistItemView } from "@/lib/work-item-checklist";
 import { getWorkItemDiscussionData, type WorkItemDiscussionData } from "@/lib/actions/work-item-discussion";
 
 // A Work Item reference as shown in a relations list — enough to render and
@@ -362,6 +363,8 @@ export async function listProjectWorkItems(
 }
 
 export type WorkItemDetailData = {
+  // KAN-9: the checklist, in manual order.
+  checklist: ChecklistItemView[];
   discussion: WorkItemDiscussionData;
   // With their colors (FR-011 of 013-project-catalogs), in the catalog's manual order.
   catalogTags: { name: string; color: TagColor }[];
@@ -475,6 +478,7 @@ export async function getWorkItemDetailData(
       pickableResult,
       fieldsDetail,
       discussionResult,
+      checklist,
     ] = await Promise.all([
       member,
       listProjectTags(projectPublicId),
@@ -484,6 +488,7 @@ export async function getWorkItemDetailData(
       listProjectWorkItems(projectPublicId, workItemId),
       fields,
       getWorkItemDiscussionData(workItemId),
+      listWorkItemChecklist(workItemId),
     ]);
 
     if (!catalogResult.ok)
@@ -500,6 +505,7 @@ export async function getWorkItemDetailData(
       throw new AppError(discussionResult.error.code, discussionResult.error.message);
 
     return {
+      checklist,
       catalogTags: catalogResult.data.map((t) => ({ name: t.name, color: t.color })),
       itemTags: itemTagsResult.data.map((t) => t.name),
       activity: activityResult.data,

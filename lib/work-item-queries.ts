@@ -1,6 +1,7 @@
-import { eq, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { projects, workItems } from "@/db/schema";
+import { projects, workItemChecklistItems, workItems } from "@/db/schema";
+import type { ChecklistItemView } from "@/lib/work-item-checklist";
 import { AppError } from "@/lib/errors";
 
 // Internal lookups shared by lib/actions/work-items.ts and
@@ -39,4 +40,18 @@ export async function workItemIsAncestorOf(
     SELECT id FROM ancestors WHERE id = ${candidateAncestorId}
   `);
   return result.rows.length > 0;
+}
+
+// KAN-9: the checklist in the user's manual order. Like the lookups above it
+// does no access check — callers verify membership first.
+export async function listWorkItemChecklist(workItemId: number): Promise<ChecklistItemView[]> {
+  return db
+    .select({
+      publicId: workItemChecklistItems.publicId,
+      text: workItemChecklistItems.text,
+      done: workItemChecklistItems.done,
+    })
+    .from(workItemChecklistItems)
+    .where(eq(workItemChecklistItems.workItemId, workItemId))
+    .orderBy(asc(workItemChecklistItems.position), asc(workItemChecklistItems.id));
 }
