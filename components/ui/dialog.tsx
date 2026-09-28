@@ -15,6 +15,7 @@ export function Dialog({
   children,
   className,
   dismissible = false,
+  panelClassName,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -23,6 +24,8 @@ export function Dialog({
   // Adds a close (X) button and closes on a click outside the panel. Opt-in:
   // form dialogs would lose what was typed on a stray backdrop click.
   dismissible?: boolean;
+  // Overrides the inner panel (its default width) — e.g. the wide search palette.
+  panelClassName?: string;
 }) {
   const ref = React.useRef<HTMLDialogElement>(null);
   // Only a press that both starts and ends on the backdrop closes it — a text
@@ -55,7 +58,7 @@ export function Dialog({
         className,
       )}
     >
-      <div className="relative w-[min(calc(100vw-2rem),24rem)] p-5 sm:p-6">
+      <div className={cn("relative w-[min(calc(100vw-2rem),24rem)] p-5 sm:p-6", panelClassName)}>
         {dismissible && (
           <button
             type="button"

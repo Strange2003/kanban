@@ -5,6 +5,8 @@ import { requireSession } from "@/lib/auth";
 import { ProjectSidebar } from "@/components/sidebar/ProjectSidebar";
 import { ProjectSidebarSkeleton } from "@/components/sidebar/ProjectSidebarSkeleton";
 import { NotificationsPanel } from "@/components/sidebar/NotificationsPanel";
+import { KeyboardShortcutsProvider } from "@/components/keyboard/KeyboardShortcutsProvider";
+import { SearchButton } from "@/components/keyboard/SearchButton";
 import { WorkspaceShell } from "@/components/sidebar/WorkspaceShell";
 
 // Protected shell for everything behind login. ProjectSidebar and
@@ -19,9 +21,12 @@ export default async function WorkspaceLayout({
   await requireSession();
 
   return (
+    <KeyboardShortcutsProvider>
     <WorkspaceShell
       notifications={
         <div className="flex items-center gap-1">
+          {/* KAN-10 */}
+          <SearchButton />
           {/* 011-agent-access-mcp FR-035 */}
           <Link
             href="/settings/agents"
@@ -46,5 +51,6 @@ export default async function WorkspaceLayout({
     >
       {children}
     </WorkspaceShell>
+    </KeyboardShortcutsProvider>
   );
 }
