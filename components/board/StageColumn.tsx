@@ -123,11 +123,14 @@ export function StageColumn({
   totalCount = workItems.length,
   filtersActive = false,
   isHiddenByFilters,
+  listenForNewShortcut = false,
 }: {
   projectPublicId: string;
   // False for a Viewer (007-roles-permissions): no dragging, renaming,
   // deleting the column or adding Work Items — they can still open cards.
   canEdit: boolean;
+  // KAN-11: the first column's "add Work Item" control answers the "n" shortcut.
+  listenForNewShortcut?: boolean;
   stage: StageWithCount;
   stages: { id: number; name: string }[];
   workItems: BoardWorkItem[];
@@ -276,7 +279,11 @@ export function StageColumn({
       </div>
       {canEdit && (
         <div className="flex shrink-0 flex-col px-2 pb-2">
-          <AddWorkItemButton stagePublicId={stage.publicId} isHiddenByFilters={isHiddenByFilters} />
+          <AddWorkItemButton
+            stagePublicId={stage.publicId}
+            isHiddenByFilters={isHiddenByFilters}
+            listenForNewShortcut={listenForNewShortcut}
+          />
         </div>
       )}
     </div>

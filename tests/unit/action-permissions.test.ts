@@ -251,6 +251,7 @@ import * as workItemRelationshipsModule from "@/lib/actions/work-item-relationsh
 import * as workItemViewsModule from "@/lib/actions/work-item-views";
 import * as workItemDiscussionModule from "@/lib/actions/work-item-discussion";
 import * as projectCatalogsModule from "@/lib/actions/project-catalogs";
+import * as searchModule from "@/lib/actions/search";
 
 // Reads gated by `requireProjectMember` alone (any member, a Viewer included, may read), or
 // actions that aren't scoped to a project's role at all.
@@ -267,6 +268,7 @@ const MEMBERSHIP_ONLY_READS = [
   "getWorkItemsView", // 009-work-item-views: read-only List/Table data (FR-017)
   "getProjectCatalogs", // 013-project-catalogs: a Viewer reads the catalogs page too (FR-007)
   "listProjectMembers",
+  "searchWorkspace", // KAN-10: account-level; membership resolved from the session in the query
   "listMyProjects", // only the caller's own projects
   "listMyNotifications", // only the caller's own notifications
   "markNotificationRead", // 011: only the caller's own notification (checked in the query)
@@ -287,6 +289,7 @@ describe("every exported Server Action is classified", () => {
     workItemViewsModule,
     workItemDiscussionModule,
     projectCatalogsModule,
+    searchModule,
   ].flatMap((module) => Object.entries(module).filter(([, value]) => typeof value === "function").map(([name]) => name));
 
   it("has no export missing from the permission sweep, the membership-only reads or the known exceptions", () => {

@@ -362,6 +362,7 @@ export function Board({
                 key={stage.id}
                 projectPublicId={projectPublicId}
                 canEdit={canEdit}
+                listenForNewShortcut={stage.id === stagesState[0]?.id}
                 stage={stage}
                 stages={stagesState.map((s) => ({ id: s.id, name: s.name }))}
                 onToggleClosing={handleToggleClosing}

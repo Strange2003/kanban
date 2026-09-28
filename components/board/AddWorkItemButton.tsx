@@ -1,20 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createWorkItem } from "@/lib/actions/work-items";
 import { Button } from "@/components/ui/button";
 import { isRolePermissionError } from "@/lib/errors";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
+import { NEW_WORK_ITEM_EVENT } from "@/lib/keyboard-shortcuts";
 
 export function AddWorkItemButton({
   stagePublicId,
   isHiddenByFilters,
+  listenForNewShortcut = false,
 }: {
   stagePublicId: string;
   // 014-board-filters-mcp-catalogs FR-014: a new Work Item has no assignee and
   // no tags; if the board's filters would hide it, say so instead of letting it vanish.
+  // KAN-11: open the form when the "n" shortcut fires (first column only).
+  listenForNewShortcut?: boolean;
   isHiddenByFilters?: (item: { assigneeUserId: null; tagNames: string[] }) => boolean;
 }) {
   const router = useRouter();
@@ -23,6 +27,16 @@ export function AddWorkItemButton({
   const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!listenForNewShortcut) return;
+    function onShortcut(event: Event) {
+      (event as CustomEvent<{ value: boolean }>).detail.value = true;
+      setAdding(true);
+    }
+    window.addEventListener(NEW_WORK_ITEM_EVENT, onShortcut);
+    return () => window.removeEventListener(NEW_WORK_ITEM_EVENT, onShortcut);
+  }, [listenForNewShortcut]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
