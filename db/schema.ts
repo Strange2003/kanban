@@ -308,6 +308,25 @@ export const workItemTimeEntries = pgTable(
   ],
 );
 
+// KAN-9: a checklist of small steps inside a Work Item's detail view. `position`
+// is the manual order; reads order by (position, id).
+export const workItemChecklistItems = pgTable(
+  "work_item_checklist_items",
+  {
+    id: serial("id").primaryKey(),
+    publicId: text("public_id").notNull().unique(),
+    workItemId: integer("work_item_id").notNull().references(() => workItems.id, { onDelete: "cascade" }),
+    text: text("text").notNull(),
+    done: boolean("done").notNull().default(false),
+    position: integer("position").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("work_item_checklist_items_item_position_idx").on(table.workItemId, table.position, table.id),
+    check("work_item_checklist_items_text_check", sql`length(${table.text}) BETWEEN 1 AND 500`),
+  ],
+);
+
 // --- WorkItemRelatedLink (005-work-item-relationships data-model.md § WorkItemRelatedLink) ---
 export const workItemRelatedLinks = pgTable(
   "work_item_related_links",

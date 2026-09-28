@@ -21,6 +21,7 @@ import { isRolePermissionError } from "@/lib/errors";
 import { can } from "@/lib/roles";
 import { CatalogPicker } from "@/components/work-items/CatalogPicker";
 import { AssigneePicker } from "@/components/work-items/AssigneePicker";
+import { ChecklistSection } from "@/components/work-items/ChecklistSection";
 import { Avatar } from "@/components/ui/avatar";
 import { LocalDate } from "@/components/ui/local-date";
 import { useToast } from "@/components/ui/toast";
@@ -732,6 +733,13 @@ export function WorkItemDetailView({
                   className="min-h-40 w-full resize-y rounded-lg border border-input bg-background/70 px-4 py-3 text-sm leading-6 shadow-sm focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:outline-none"
                 />
               </section>
+
+              <ChecklistSection
+                projectPublicId={projectPublicId}
+                displayNumber={workItem.displayNumber}
+                initialItems={initialDetail.checklist}
+                canEdit={canEdit}
+              />
 
               <section className="rounded-xl border border-border bg-card/70 p-5 sm:p-6">
                 <div className="mb-4 flex items-center gap-2">

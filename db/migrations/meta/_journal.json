@@ -64,6 +64,13 @@
       "when": 1790360652061,
       "tag": "0008_project_catalogs",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790626568352,
+      "tag": "0009_work_item_checklist",
+      "breakpoints": true
     }
   ]
 }

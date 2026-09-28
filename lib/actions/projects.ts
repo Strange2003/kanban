@@ -12,7 +12,7 @@ import { logUnassignOnMemberExitWithinTx } from "@/lib/work-item-assignee";
 import { requireProjectMember, requireProjectPermission } from "@/lib/permissions";
 import { ASSIGNABLE_ROLES, type AssignableRole, type ProjectRole } from "@/lib/roles";
 import { generatePublicId, deriveWorkItemPrefix } from "@/lib/ids";
-import { DEFAULT_PROJECT_TEMPLATE_KEY, getProjectTemplate, isProjectTemplateKey } from "@/lib/project-templates";
+import { getProjectTemplate, isProjectTemplateKey } from "@/lib/project-templates";
 import { AppError, runAction, type Result } from "@/lib/errors";
 
 export type ProjectWithMemberCount = typeof projects.$inferSelect & { memberCount: number };
@@ -51,7 +51,9 @@ export async function createProject(input: {
       throw new AppError("NAME_REQUIRED", parsed.error.issues[0]?.message ?? "Project name is required.");
     }
 
-    const templateKey = input.templateKey ?? DEFAULT_PROJECT_TEMPLATE_KEY;
+    // Omitted = Blank, so callers that predate KAN-5 keep creating an empty
+    // board; the dialog preselects DEFAULT_PROJECT_TEMPLATE_KEY and always sends it.
+    const templateKey = input.templateKey ?? "blank";
     if (!isProjectTemplateKey(templateKey)) {
       throw new AppError("INVALID_TEMPLATE", "Unknown project template.");
     }

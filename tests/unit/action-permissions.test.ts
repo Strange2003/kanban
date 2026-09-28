@@ -122,6 +122,13 @@ import { sendInvitation, cancelInvitation, listPendingInvitations } from "@/lib/
 import type { Result } from "@/lib/errors";
 import { addWorkItemComment, addWorkItemTimeEntry, removeWorkItemTimeEntry } from "@/lib/actions/work-item-discussion";
 import {
+  addChecklistItem,
+  setChecklistItemDone,
+  editChecklistItemText,
+  removeChecklistItem,
+  moveChecklistItem,
+} from "@/lib/actions/work-item-checklist";
+import {
   createCatalogValue,
   renameCatalogValue,
   setTagColor,
@@ -168,6 +175,13 @@ export const CASES: Case[] = [
   { action: "addWorkItemTimeEntry", permission: "workItem:edit", run: () => addWorkItemTimeEntry({ workItemId: 1, minutes: 30 }), denied: READ_ONLY_DENIED, allowed: EDITORS },
   { action: "removeWorkItemTimeEntry", permission: "workItem:edit", run: () => removeWorkItemTimeEntry("entry-1"), denied: READ_ONLY_DENIED, allowed: EDITORS },
   { action: "addWorkItemComment", permission: "workItem:comment", run: () => addWorkItemComment({ workItemId: 1, body: "Hello" }), denied: [], allowed: ["owner", "member", "viewer"] },
+
+  // --- workItem:edit (lib/actions/work-item-checklist.ts, KAN-9): editing the checklist is a Work Item edit
+  { action: "addChecklistItem", permission: "workItem:edit", run: () => addChecklistItem({ projectPublicId: P, displayNumber: 1, text: "Step" }), denied: READ_ONLY_DENIED, allowed: EDITORS },
+  { action: "setChecklistItemDone", permission: "workItem:edit", run: () => setChecklistItemDone({ projectPublicId: P, displayNumber: 1, itemPublicId: "item-1", done: true }), denied: READ_ONLY_DENIED, allowed: EDITORS },
+  { action: "editChecklistItemText", permission: "workItem:edit", run: () => editChecklistItemText({ projectPublicId: P, displayNumber: 1, itemPublicId: "item-1", text: "New" }), denied: READ_ONLY_DENIED, allowed: EDITORS },
+  { action: "removeChecklistItem", permission: "workItem:edit", run: () => removeChecklistItem({ projectPublicId: P, displayNumber: 1, itemPublicId: "item-1" }), denied: READ_ONLY_DENIED, allowed: EDITORS },
+  { action: "moveChecklistItem", permission: "workItem:edit", run: () => moveChecklistItem({ projectPublicId: P, displayNumber: 1, itemPublicId: "item-1", direction: "up" }), denied: READ_ONLY_DENIED, allowed: EDITORS },
 
   // --- relationship:edit (lib/actions/work-item-relationships.ts)
   { action: "setWorkItemParent", permission: "relationship:edit", run: () => setWorkItemParent({ workItemId: 1, parentWorkItemId: 2 }), denied: READ_ONLY_DENIED, allowed: EDITORS },
@@ -252,6 +266,7 @@ import * as workItemViewsModule from "@/lib/actions/work-item-views";
 import * as workItemDiscussionModule from "@/lib/actions/work-item-discussion";
 import * as projectCatalogsModule from "@/lib/actions/project-catalogs";
 import * as searchModule from "@/lib/actions/search";
+import * as workItemChecklistModule from "@/lib/actions/work-item-checklist";
 
 // Reads gated by `requireProjectMember` alone (any member, a Viewer included, may read), or
 // actions that aren't scoped to a project's role at all.
@@ -288,6 +303,7 @@ describe("every exported Server Action is classified", () => {
     workItemRelationshipsModule,
     workItemViewsModule,
     workItemDiscussionModule,
+    workItemChecklistModule,
     projectCatalogsModule,
     searchModule,
   ].flatMap((module) => Object.entries(module).filter(([, value]) => typeof value === "function").map(([name]) => name));
