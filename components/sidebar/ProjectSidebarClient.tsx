@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronRight, Plus, Search, Tag, X } from "lucide-react";
+import { ChevronRight, ListChecks, Plus, Search, Tag, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -170,6 +170,18 @@ export function ProjectSidebarClient({
           <Plus className="h-4 w-4" />
         </Button>
       </div>
+
+      <Link
+        href="/my-work"
+        aria-current={pathname === "/my-work" ? "page" : undefined}
+        className={cn(
+          "mx-3 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground",
+          pathname === "/my-work" && "bg-accent font-medium text-accent-foreground",
+        )}
+      >
+        <ListChecks className="h-4 w-4" aria-hidden />
+        My work
+      </Link>
 
       {!(isEmpty && !search) && (
         <div className="relative px-3">
