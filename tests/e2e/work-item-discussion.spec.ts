@@ -23,6 +23,9 @@ test("owner saves an estimate, logs time, comments, and sees a separate history"
 
   await page.getByLabel("Add a comment").fill("I will share the draft tomorrow.");
   await page.getByRole("button", { name: "Comment", exact: true }).click();
+  // getByText also matches the textarea while it still holds the draft, so
+  // wait for the draft to clear — it only does once the comment is saved.
+  await expect(page.getByLabel("Add a comment")).toHaveValue("");
   await expect(page.getByText("I will share the draft tomorrow.")).toBeVisible();
 
   await page.reload();
@@ -61,6 +64,7 @@ test("a Viewer can comment while fields and time controls remain read-only", asy
   await expect(viewerPage.getByLabel("Log time (hours)")).toHaveCount(0);
   await viewerPage.getByLabel("Add a comment").fill("Reviewed — looks good.");
   await viewerPage.getByRole("button", { name: "Comment", exact: true }).click();
+  await expect(viewerPage.getByLabel("Add a comment")).toHaveValue("");
   await expect(viewerPage.getByText("Reviewed — looks good.")).toBeVisible();
 
   await ownerPage.goto(projectUrl);

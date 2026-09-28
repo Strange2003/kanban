@@ -128,14 +128,18 @@ export async function addWorkItem(page: Page, title: string) {
  * `onClick` handler after it renders, silently losing the click and leaving
  * the caller stuck on the board (where a loosely-matched "Delete" button
  * would actually be the unrelated "Delete column" one — a confusing failure
- * mode if this isn't retried here).
+ * mode if this isn't retried here). A retry only clicks a card that's still
+ * there: on a cold `next dev` the first click can navigate slower than the
+ * 2s wait (the detail route compiles on first hit), and a blocking click on
+ * a card that has just unmounted would hang until the test times out.
  */
 export async function openCard(page: Page, title: string) {
   const card = page.locator('[data-testid="work-item-card"]', { hasText: title });
   for (let attempt = 1; attempt <= 3; attempt++) {
-    await card.click();
+    if (attempt === 1) await card.click();
+    else await card.click({ timeout: 5000 }).catch(() => {});
     try {
-      await page.waitForURL(/\/work-items\/\d+$/, { timeout: 2000 });
+      await page.waitForURL(/\/work-items\/\d+$/, { timeout: attempt === 3 ? 30_000 : 2000 });
       return;
     } catch {
       if (attempt === 3) throw new Error(`Clicking the "${title}" card never navigated to its detail view.`);
