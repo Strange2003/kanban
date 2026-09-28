@@ -63,7 +63,12 @@ export async function searchWorkspace(query: string): Promise<Result<SearchResul
         .from(workItems)
         .innerJoin(projects, eq(projects.id, workItems.projectId))
         .where(and(inArray(workItems.projectId, myProjectIds), or(ilike(workItems.title, pattern), exactId)))
-        .orderBy(exactId ? sql`case when ${exactId} then 0 else 1 end` : sql`0`, desc(workItems.updatedAt))
+        // Exact ID match first. No placeholder otherwise: a bare `ORDER BY 0`
+        // is read by Postgres as a (non-existent) select-list position.
+        .orderBy(
+          ...(exactId ? [sql`case when ${exactId} then 0 else 1 end`] : []),
+          desc(workItems.updatedAt),
+        )
         .limit(MAX_WORK_ITEMS),
     ]);
 
