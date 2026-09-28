@@ -1,13 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
 import { projectMembers, stages, tags, workItems, workItemTags } from "@/db/schema";
 import { logActivity } from "@/lib/activity";
 import { requireProjectMember, requireProjectPermission } from "@/lib/permissions";
 import { generatePublicId } from "@/lib/ids";
+import { boardArchiveCutoff } from "@/lib/work-item-closing";
 import { listTagCatalog } from "@/lib/work-item-catalogs";
 import { AppError, runAction, type Result } from "@/lib/errors";
 import type { WorkItemWithDisplayId } from "@/lib/actions/work-items";
@@ -25,7 +26,13 @@ export type BoardWorkItem = WorkItemWithDisplayId & {
 };
 import type { ProjectRole } from "@/lib/roles";
 
-export type StageWithCount = typeof stages.$inferSelect & { workItemCount: number };
+export type StageWithCount = typeof stages.$inferSelect & {
+  workItemCount: number;
+  // KAN-7: Work Items closed for more than 14 days, left out of `workItems`.
+  // `workItemCount` still counts them, and column positions stay contiguous
+  // over visible + hidden items.
+  hiddenClosedCount: number;
+};
 
 // FR-001 of 003-kanban-board. Also returns the caller's current role in the
 // project (FR-005 of 007-roles-permissions) so the page can render read-only
@@ -49,10 +56,15 @@ export async function getBoard(
   return runAction(async () => {
     const { actor, project, membership } = await requireProjectMember(projectPublicId);
 
+    // KAN-7: closed for more than 14 days = archived on the board. Display
+    // only — closed_at and every write path are untouched.
+    const archiveCutoff = boardArchiveCutoff(new Date()).toISOString();
+
     const stageRows = await db
       .select({
         stage: stages,
         workItemCount: sql<number>`count(${workItems.id})`.mapWith(Number),
+        hiddenClosedCount: sql<number>`count(${workItems.id}) filter (where ${workItems.closedAt} < ${archiveCutoff}::timestamptz)`.mapWith(Number),
       })
       .from(stages)
       .leftJoin(workItems, eq(workItems.stageId, stages.id))
@@ -64,7 +76,12 @@ export async function getBoard(
       .select({ workItem: workItems, assigneeName: user.name, assigneeImage: user.image })
       .from(workItems)
       .leftJoin(user, eq(user.id, workItems.assigneeUserId))
-      .where(eq(workItems.projectId, project.id))
+      .where(
+        and(
+          eq(workItems.projectId, project.id),
+          or(isNull(workItems.closedAt), sql`${workItems.closedAt} >= ${archiveCutoff}::timestamptz`),
+        ),
+      )
       .orderBy(asc(workItems.position));
 
     // One query for every card's tags, not one per card (013-project-catalogs
@@ -91,7 +108,7 @@ export async function getBoard(
     ]);
 
     return {
-      stages: stageRows.map((r) => ({ ...r.stage, workItemCount: r.workItemCount })),
+      stages: stageRows.map((r) => ({ ...r.stage, workItemCount: r.workItemCount, hiddenClosedCount: r.hiddenClosedCount ?? 0 })),
       workItems: workItemRows.map(({ workItem: wi, assigneeName, assigneeImage }) => ({
         ...wi,
         displayId: `${project.workItemPrefix}-${wi.displayNumber}`,
