@@ -38,8 +38,10 @@ import { createMcpRoute } from "@/lib/mcp/route-handler";
 import { resetRateLimits } from "@/lib/mcp/rate-limit";
 
 const EXPECTED_TOOLS = [
+  "add_checklist_item",
   "create_column",
   "create_work_items",
+  "delete_checklist_item",
   "delete_column",
   "delete_work_item",
   "get_board",
@@ -48,6 +50,7 @@ const EXPECTED_TOOLS = [
   "list_catalogs",
   "list_members",
   "list_projects",
+  "move_checklist_item",
   "move_work_item",
   "rename_column",
   "reorder_columns",
@@ -55,6 +58,7 @@ const EXPECTED_TOOLS = [
   "set_column_closing",
   "set_parent",
   "set_tag_color",
+  "update_checklist_item",
   "update_work_item",
 ];
 
@@ -132,7 +136,7 @@ describe("POST /api/mcp", () => {
     for (const read of ["list_projects", "get_board", "search_work_items", "get_work_item", "list_members", "list_catalogs"]) {
       expect(annotations[read]).toMatchObject({ readOnlyHint: true, openWorldHint: false });
     }
-    for (const destructive of ["delete_work_item", "delete_column"]) {
+    for (const destructive of ["delete_work_item", "delete_column", "delete_checklist_item"]) {
       expect(annotations[destructive]).toMatchObject({ readOnlyHint: false, destructiveHint: true });
     }
     expect(annotations.create_work_items).toMatchObject({ readOnlyHint: false, destructiveHint: false });
@@ -214,6 +218,24 @@ describe("POST /api/mcp", () => {
     });
     // The agent never needed a browser session.
     expect(mockGetSession).not.toHaveBeenCalled();
+  });
+
+  // KAN-9: an update with nothing to change is rejected before touching any data.
+  it("update_checklist_item needs text or done", async () => {
+    queue.oauth_consent = [[{ id: "c1" }]];
+    queue.user = [[{ id: "u1" }]];
+    queue.oauth_client = [[{ name: "Claude" }]];
+
+    const response = await createMcpRoute({ verify: verifyAs(claims) })(
+      rpc("tools/call", {
+        name: "update_checklist_item",
+        arguments: { projectId: "p1", workItemId: "KAN-1", checklistItemId: "s1" },
+      }),
+    );
+
+    const result = await resultOf(response);
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({ code: "VALIDATION_ERROR" });
   });
 
   it("hides another project behind NOT_FOUND", async () => {

@@ -1,5 +1,6 @@
 import { McpServer, createMcpHandler, type McpHttpHandler } from "@modelcontextprotocol/server";
 import { registerCatalogTools } from "@/lib/mcp/tools/catalogs";
+import { registerChecklistTools } from "@/lib/mcp/tools/checklist";
 import { registerColumnTools } from "@/lib/mcp/tools/columns";
 import { registerReadTools } from "@/lib/mcp/tools/read";
 import { registerWorkItemTools } from "@/lib/mcp/tools/work-items";
@@ -21,7 +22,8 @@ export const MCP_SERVER_INSTRUCTIONS = [
   "go with their projectId; memberId (to assign people) comes from list_members.",
   "Before creating Work Items, use search_work_items to check which already exist.",
   "Before assigning tags, areas or sizes, call list_catalogs and reuse existing values instead of creating variants.",
-  "Deleting a Work Item or a column is permanent: confirm with the user first.",
+  "Small steps inside one Work Item go in its checklist (add_checklist_item), not in child Work Items.",
+  "Deleting a Work Item, a column or a checklist step is permanent: confirm with the user first.",
   "You can't manage members, invitations, roles or the project itself — the user does that in the app.",
 ].join(" ");
 
@@ -34,6 +36,7 @@ export function buildKanbanMcpServer(): McpServer {
   registerWorkItemTools(server);
   registerColumnTools(server);
   registerCatalogTools(server);
+  registerChecklistTools(server);
   return server;
 }
 
