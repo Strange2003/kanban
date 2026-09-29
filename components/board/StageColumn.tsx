@@ -124,6 +124,7 @@ export function StageColumn({
   filtersActive = false,
   isHiddenByFilters,
   listenForNewShortcut = false,
+  columnIndex = 0,
 }: {
   projectPublicId: string;
   // False for a Viewer (007-roles-permissions): no dragging, renaming,
@@ -131,6 +132,8 @@ export function StageColumn({
   canEdit: boolean;
   // KAN-11: the first column's "add Work Item" control answers the "n" shortcut.
   listenForNewShortcut?: boolean;
+  // 015-loading-animations: staggers this column's entrance on the board.
+  columnIndex?: number;
   stage: StageWithCount;
   stages: { id: number; name: string }[];
   workItems: BoardWorkItem[];
@@ -177,6 +180,8 @@ export function StageColumn({
     >
       <div
         onPointerDown={canEdit ? (event) => listeners?.onPointerDown?.(event) : undefined}
+        data-kb-land
+        style={{ "--kb-delay": `${Math.min(columnIndex * 40, 200)}ms` } as React.CSSProperties}
         className={cn(
           "flex items-center justify-between rounded-t-lg px-3 py-2",
           canEdit && "cursor-grab active:cursor-grabbing",
@@ -256,6 +261,7 @@ export function StageColumn({
               onReorder={onReorderWorkItem}
               canMoveUp={index > 0}
               canMoveDown={index < workItems.length - 1}
+              landDelayMs={Math.min(columnIndex * 40 + index * 30, 200)}
             />
           ))}
         </SortableContext>

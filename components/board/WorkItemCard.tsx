@@ -24,6 +24,7 @@ export function WorkItemCard({
   onReorder,
   canMoveUp,
   canMoveDown,
+  landDelayMs = 0,
 }: {
   workItem: BoardWorkItem;
   projectPublicId: string;
@@ -35,6 +36,8 @@ export function WorkItemCard({
   onReorder: (workItemId: number, stageId: number, direction: -1 | 1) => void;
   canMoveUp: boolean;
   canMoveDown: boolean;
+  // 015-loading-animations: when this card lands as the board mounts.
+  landDelayMs?: number;
 }) {
   const router = useRouter();
   // Sortable (not just draggable) so it participates in both cross-column
@@ -107,7 +110,9 @@ export function WorkItemCard({
         transform: CSS.Transform.toString(transform),
         transition,
         opacity: isDragging ? 0.4 : 1,
-      }}
+        "--kb-delay": `${landDelayMs}ms`,
+      } as React.CSSProperties}
+      data-kb-land
       className={cn(
         "relative rounded-md border border-border bg-background p-2 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         canEdit

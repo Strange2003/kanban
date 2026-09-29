@@ -21,6 +21,7 @@ import {
 import { reorderStages, setStageClosing, type StageWithCount } from "@/lib/actions/board";
 import { moveWorkItem, reorderWorkItemsInStage } from "@/lib/actions/work-items";
 import type { BoardWorkItem } from "@/lib/actions/board";
+import { cn } from "@/lib/utils";
 import { StageColumn } from "@/components/board/StageColumn";
 import { WorkItemCardPreview } from "@/components/board/WorkItemCard";
 import { isRolePermissionError } from "@/lib/errors";
@@ -32,6 +33,7 @@ import { BoardFilters } from "@/components/board/BoardFilters";
 import { useViewQuery } from "@/components/views/useViewQuery";
 import { matchesAssigneeAndTags, serializeViewQuery, type WorkItemViewOptions } from "@/lib/work-item-view";
 import { boardQueryStorageKey } from "@/lib/board-query-storage";
+import { writeBoardColumns } from "@/lib/board-column-memory";
 
 // The board has no column filter, so no column id is ever "valid" in its query.
 const NO_STAGES: ReadonlySet<string> = new Set();
@@ -116,6 +118,23 @@ export function Board({
       // Ignore: remembering the filters is only a convenience.
     }
   }, [projectPublicId, boardQueryString]);
+
+  // 015-loading-animations: remember the column count for this board's loading
+  // skeleton (lib/board-column-memory.ts), and land the cards only while the
+  // board has just mounted — later inserts, moves and refreshes don't replay it.
+  const columnCount = stagesState.length;
+  useEffect(() => {
+    try {
+      writeBoardColumns(window.localStorage, projectPublicId, columnCount);
+    } catch {
+      // Ignore: the remembered count is only a presentation hint.
+    }
+  }, [projectPublicId, columnCount]);
+  const [entering, setEntering] = useState(true);
+  useEffect(() => {
+    const timer = setTimeout(() => setEntering(false), 600);
+    return () => clearTimeout(timer);
+  }, []);
 
   // A small activation distance lets a plain click (opening a Work Item's
   // detail panel, or a column's delete button) fire normally, while a real
@@ -352,14 +371,20 @@ export function Board({
             Swipe sideways to see all {stagesState.length} columns.
           </p>
         )}
-        <div className="flex min-h-0 min-w-0 flex-1 snap-x snap-mandatory scroll-px-4 gap-4 overflow-x-auto overflow-y-hidden p-4 md:snap-none">
+        <div
+          className={cn(
+            "flex min-h-0 min-w-0 flex-1 snap-x snap-mandatory scroll-px-4 gap-4 overflow-x-auto overflow-y-hidden p-4 md:snap-none",
+            entering && "kb-board-entering",
+          )}
+        >
           <SortableContext
             items={stagesState.map((s) => `stage:${s.id}`)}
             strategy={horizontalListSortingStrategy}
           >
-            {stagesState.map((stage) => (
+            {stagesState.map((stage, columnIndex) => (
               <StageColumn
                 key={stage.id}
+                columnIndex={columnIndex}
                 projectPublicId={projectPublicId}
                 canEdit={canEdit}
                 listenForNewShortcut={stage.id === stagesState[0]?.id}
