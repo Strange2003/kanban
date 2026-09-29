@@ -29,6 +29,7 @@ Existing self-hostable alternatives (Kan.bn, Kaneo, Vikunja, Planka, WeKan, Kanb
 - Work Items are dragged between and within columns; on mobile, columns scroll sideways and each card has a "Move to column" control.
 - Any column can be marked as a **closing column** (e.g. "Done"): Work Items in it are closed; they reopen when they leave it.
 - **Filters** by assignee ("Assigned to me", any member, unassigned) and by tag: non-matching cards hide, every column stays, and each column shows how many cards are visible. Filters live in the URL and carry over to List and Table.
+- **Loading states** shaped like each page: while a board loads, card silhouettes fall into as many columns as it had last time (remembered in the browser), and the cards land in place when it arrives. Every other page has its own skeleton; nothing flashes on fast loads, and it all stays still with the system's "reduce motion" setting.
 
 **Work Items**
 - A short, human-readable ID per project (e.g. `KAN-42`), title and plain-text description.
@@ -252,7 +253,7 @@ This project follows **Spec-Driven Development** with [Spec Kit](https://github.
 - ✅ **Phase 2 (depth)** — relationships ([`005`](specs/005-work-item-relationships/)), detail view ([`006`](specs/006-work-item-detail-view/)), roles & permissions ([`007`](specs/007-roles-permissions/))
 - ✅ **Phase 3 (planning & views)** — extended fields and closing columns ([`008`](specs/008-work-item-fields/)), List and Table views ([`009`](specs/009-work-item-views/))
 - ✅ **Legal pages** ([`010`](specs/010-legal-pages/)) — `/privacy` and `/terms`; Google sign-in published for everyone
-- ✅ **Phase 4 so far** — AI agent access over MCP + Work Item assignee ([`011`](specs/011-agent-access-mcp/)); collaborative Work Item detail with comments, time tracking and History tab ([`012`](specs/012-work-item-discussion/)); per-project catalogs — tags with color, areas and sizes, with Size replacing Iteration ([`013`](specs/013-project-catalogs/)); board filters by assignee and tags, and catalogs for AI agents ([`014`](specs/014-board-filters-mcp-catalogs/))
+- ✅ **Phase 4 so far** — AI agent access over MCP + Work Item assignee ([`011`](specs/011-agent-access-mcp/)); collaborative Work Item detail with comments, time tracking and History tab ([`012`](specs/012-work-item-discussion/)); per-project catalogs — tags with color, areas and sizes, with Size replacing Iteration ([`013`](specs/013-project-catalogs/)); board filters by assignee and tags, and catalogs for AI agents ([`014`](specs/014-board-filters-mcp-catalogs/)); loading animations and a skeleton per page ([`015`](specs/015-loading-animations/))
 - ✅ **Deployment** — the first instance runs on Render against its own production Neon branch, migrated through `0008`
 
 Still open: the manual quickstart passes of 007 (T057), 008 (T052), 009 (T028) and 011 (T057 — end-to-end check with a real MCP client).

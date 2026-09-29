@@ -115,3 +115,101 @@ body {
 ::-webkit-resizer {
   background: transparent;
 }
+
+/* 015-loading-animations (contracts/loading-states.md): loading skeletons and
+   the board's entrance. Every animation moves with `translate`, never
+   `transform` — @dnd-kit writes `transform` inline on columns and cards, and an
+   animated `transform` would override it. `backwards` leaves nothing pinned
+   once an animation ends. */
+
+/* Skeletons stay invisible for 150 ms, so a fast load never flashes one (FR-008).
+   A fade, not motion, so it applies with reduced motion too. */
+.kb-skeleton {
+  animation: kb-appear 180ms ease-out 150ms backwards;
+}
+
+@keyframes kb-appear {
+  from {
+    opacity: 0;
+  }
+}
+
+/* All the motion lives here: with "reduce motion" skeletons are static and the
+   board appears without landing (FR-009). */
+@media (prefers-reduced-motion: no-preference) {
+  /* The board's card silhouettes: fall, settle, fade, repeat. */
+  .kb-fall {
+    animation: kb-fall 2.6s cubic-bezier(0.3, 0.7, 0.3, 1) var(--kb-delay, 0ms) infinite both;
+  }
+
+  /* Other skeletons' blocks: fall once, then breathe while the page loads. */
+  .kb-fall-in {
+    animation:
+      kb-fall-in 420ms cubic-bezier(0.2, 0.8, 0.25, 1) var(--kb-delay, 0ms) backwards,
+      kb-breathe 2.4s ease-in-out calc(var(--kb-delay, 0ms) + 420ms) infinite;
+  }
+
+  /* The board landing, only while Board has just mounted (FR-004, FR-005). */
+  .kb-board-entering [data-kb-land] {
+    animation: kb-land 260ms cubic-bezier(0.2, 0.8, 0.25, 1) var(--kb-delay, 0ms) backwards;
+  }
+}
+
+@keyframes kb-fall {
+  0% {
+    translate: 0 -34px;
+    rotate: -1.5deg;
+    opacity: 0;
+  }
+  18% {
+    translate: 0 0;
+    rotate: 0deg;
+    opacity: 1;
+  }
+  24% {
+    translate: 0 -3px;
+  }
+  30%,
+  76% {
+    translate: 0 0;
+    opacity: 1;
+  }
+  100% {
+    translate: 0 8px;
+    opacity: 0;
+  }
+}
+
+@keyframes kb-fall-in {
+  0% {
+    translate: 0 -16px;
+    opacity: 0;
+  }
+  60% {
+    translate: 0 2px;
+    opacity: 1;
+  }
+  100% {
+    translate: 0 0;
+  }
+}
+
+@keyframes kb-breathe {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes kb-land {
+  0% {
+    translate: 0 -14px;
+    opacity: 0;
+  }
+  60% {
+    translate: 0 2px;
+    opacity: 1;
+  }
+  100% {
+    translate: 0 0;
+  }
+}
