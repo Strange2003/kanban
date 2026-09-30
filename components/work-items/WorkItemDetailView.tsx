@@ -100,6 +100,8 @@ export function WorkItemDetailView({
   const [estimateHours, setEstimateHours] = useState(minutesToHoursInput(workItem.estimateMinutes));
   const [closing, setClosing] = useState(false);
   const [movingColumn, setMovingColumn] = useState(false);
+  // Shown until router.refresh() brings the new column, so the select doesn't snap back.
+  const [pendingStageId, setPendingStageId] = useState<number | null>(null);
   const today = useLocalToday();
   const [selectedTags, setSelectedTags] = useState(initialDetail.itemTags);
   const [savedFields, setSavedFields] = useState(() => ({
@@ -398,14 +400,16 @@ export function WorkItemDetailView({
 
   // KAN-17: moves the item to the end of the chosen column, like MCP move_work_item.
   async function handleMoveToColumn(toStageId: number) {
-    if (!canMove || movingColumn || toStageId === initialDetail.stage.id) return;
+    if (!canMove || movingColumn || toStageId === (pendingStageId ?? initialDetail.stage.id)) return;
     const target = initialDetail.stages.find((stage) => stage.id === toStageId);
     if (!target) return;
     setError(null);
     setMovingColumn(true);
+    setPendingStageId(toStageId);
     const result = await moveWorkItem({ workItemId: workItem.id, toStageId, toPosition: target.count });
     setMovingColumn(false);
     if (!result.ok) {
+      setPendingStageId(null);
       setError(result.error.message);
       router.refresh();
       return;
@@ -620,7 +624,7 @@ export function WorkItemDetailView({
                   <Label htmlFor="wi-column">Column</Label>
                   <select
                     id="wi-column"
-                    value={initialDetail.stage.id}
+                    value={pendingStageId ?? initialDetail.stage.id}
                     onChange={(event) => void handleMoveToColumn(Number(event.target.value))}
                     disabled={!canMove || movingColumn}
                     className={selectClassName}
