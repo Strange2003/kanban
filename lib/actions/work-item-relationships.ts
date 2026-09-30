@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, asc, eq, or, sql } from "drizzle-orm";
+import { and, asc, count, eq, or, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { workItems, workItemRelatedLinks, stages, areas, sizes, projectMembers } from "@/db/schema";
 import { user } from "@/db/auth-schema";
@@ -382,7 +382,10 @@ export type WorkItemDetailData = {
   catalogSizes: string[];
   itemArea: string | null;
   itemSize: string | null;
-  stage: { name: string; isClosing: boolean };
+  stage: { id: number; name: string; isClosing: boolean };
+  // KAN-17: the project's columns in board order, for the Column field.
+  // `count` is how many items the column holds, to drop the item at the end.
+  stages: { id: number; name: string; count: number }[];
   hasClosingStage: boolean;
   // 011-agent-access-mcp: the current assignee and every current member for
   // the Assignee picker (FR-004). `email` only for roles that already see
@@ -398,9 +401,10 @@ async function getFieldsDetail(projectId: number, workItemId: number, role: Proj
   // All four lookups at once: run one after another they added sequential
   // round trips to every detail page open (008 SC-007; found through a flaky
   // 005 e2e whose page took >2s to show a relation link).
-  const [[row], [closing], catalogAreas, catalogSizes, memberRows] = await Promise.all([
+  const [[row], [closing], catalogAreas, catalogSizes, memberRows, stageRows] = await Promise.all([
     db
       .select({
+        stageId: stages.id,
         stageName: stages.name,
         isClosing: stages.isClosing,
         areaName: areas.name,
@@ -429,6 +433,13 @@ async function getFieldsDetail(projectId: number, workItemId: number, role: Proj
       .innerJoin(user, eq(user.id, projectMembers.userId))
       .where(eq(projectMembers.projectId, projectId))
       .orderBy(asc(user.name)),
+    db
+      .select({ id: stages.id, name: stages.name, count: count(workItems.id) })
+      .from(stages)
+      .leftJoin(workItems, eq(workItems.stageId, stages.id))
+      .where(eq(stages.projectId, projectId))
+      .groupBy(stages.id)
+      .orderBy(asc(stages.position), asc(stages.id)),
   ]);
   if (!row) throw new AppError("NOT_FOUND", "Work item not found.");
   const showEmails = can(role, "invitation:viewPending");
@@ -438,7 +449,8 @@ async function getFieldsDetail(projectId: number, workItemId: number, role: Proj
     catalogSizes,
     itemArea: row.areaName,
     itemSize: row.sizeName,
-    stage: { name: row.stageName, isClosing: row.isClosing },
+    stage: { id: row.stageId, name: row.stageName, isClosing: row.isClosing },
+    stages: stageRows,
     hasClosingStage: closing !== undefined,
     assignee:
       row.assigneeUserId !== null

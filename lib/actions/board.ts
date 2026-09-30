@@ -4,12 +4,12 @@ import { revalidatePath } from "next/cache";
 import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
-import { projectMembers, stages, tags, workItems, workItemTags } from "@/db/schema";
+import { areas, projectMembers, sizes, stages, tags, workItems, workItemTags } from "@/db/schema";
 import { logActivity } from "@/lib/activity";
 import { requireProjectMember, requireProjectPermission } from "@/lib/permissions";
 import { generatePublicId } from "@/lib/ids";
 import { boardArchiveCutoff } from "@/lib/work-item-closing";
-import { listTagCatalog } from "@/lib/work-item-catalogs";
+import { listCatalog, listTagCatalog } from "@/lib/work-item-catalogs";
 import { AppError, runAction, type Result } from "@/lib/errors";
 import type { WorkItemWithDisplayId } from "@/lib/actions/work-items";
 import type { AssigneeView } from "@/lib/work-item-view";
@@ -22,6 +22,9 @@ import type { TagColor } from "@/lib/tag-colors";
  */
 export type BoardWorkItem = WorkItemWithDisplayId & {
   assignee: AssigneeView | null;
+  // KAN-15: the Area and Size filters' values (names, by project).
+  areaName: string | null;
+  sizeName: string | null;
   tags: { name: string; color: TagColor }[];
 };
 import type { ProjectRole } from "@/lib/roles";
@@ -51,6 +54,9 @@ export async function getBoard(
     currentUserId: string;
     members: AssigneeView[];
     tagCatalog: { name: string; color: TagColor }[];
+    // KAN-15: the Area and Size catalogs' names in manual order.
+    areaCatalog: string[];
+    sizeCatalog: string[];
   }>
 > {
   return runAction(async () => {
@@ -73,9 +79,17 @@ export async function getBoard(
       .orderBy(asc(stages.position));
 
     const workItemRows = await db
-      .select({ workItem: workItems, assigneeName: user.name, assigneeImage: user.image })
+      .select({
+        workItem: workItems,
+        assigneeName: user.name,
+        assigneeImage: user.image,
+        areaName: areas.name,
+        sizeName: sizes.name,
+      })
       .from(workItems)
       .leftJoin(user, eq(user.id, workItems.assigneeUserId))
+      .leftJoin(areas, eq(areas.id, workItems.areaId))
+      .leftJoin(sizes, eq(sizes.id, workItems.sizeId))
       .where(
         and(
           eq(workItems.projectId, project.id),
@@ -97,7 +111,7 @@ export async function getBoard(
       tagsByItem.set(workItemId, [...(tagsByItem.get(workItemId) ?? []), { name, color }]);
     }
 
-    const [members, tagCatalog] = await Promise.all([
+    const [members, tagCatalog, areaCatalog, sizeCatalog] = await Promise.all([
       db
         .select({ userId: projectMembers.userId, name: user.name, image: user.image })
         .from(projectMembers)
@@ -105,17 +119,21 @@ export async function getBoard(
         .where(eq(projectMembers.projectId, project.id))
         .orderBy(asc(user.name)),
       listTagCatalog(project.id),
+      listCatalog("area", project.id),
+      listCatalog("size", project.id),
     ]);
 
     return {
       stages: stageRows.map((r) => ({ ...r.stage, workItemCount: r.workItemCount, hiddenClosedCount: r.hiddenClosedCount ?? 0 })),
-      workItems: workItemRows.map(({ workItem: wi, assigneeName, assigneeImage }) => ({
+      workItems: workItemRows.map(({ workItem: wi, assigneeName, assigneeImage, areaName, sizeName }) => ({
         ...wi,
         displayId: `${project.workItemPrefix}-${wi.displayNumber}`,
         assignee:
           wi.assigneeUserId !== null
             ? { userId: wi.assigneeUserId, name: assigneeName ?? "Unknown", image: assigneeImage }
             : null,
+        areaName,
+        sizeName,
         tags: tagsByItem.get(wi.id) ?? [],
       })),
       role: membership.role,
@@ -123,6 +141,8 @@ export async function getBoard(
       currentUserId: actor.userId,
       members,
       tagCatalog,
+      areaCatalog,
+      sizeCatalog,
     };
   });
 }

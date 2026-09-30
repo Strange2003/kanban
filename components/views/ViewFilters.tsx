@@ -124,7 +124,7 @@ const withNone = (choices: Choice[]): Choice[] => [
 const levelChoices = withNone(
   WORK_ITEM_LEVELS.map((l) => ({ value: l, label: LEVEL_LABELS[l] })),
 );
-const nameChoices = (names: string[]) =>
+export const nameChoices = (names: string[]) =>
   withNone(names.map((n) => ({ value: n, label: n })));
 
 // The Assignee filter's choices, shared with the board (FR-008 of 011, FR-002 of 014).

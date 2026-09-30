@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  BOARD_QUERY_KEYS,
   DEFAULT_VIEW_QUERY,
   buildWorkItemTree,
   filterWorkItems,
   hasActiveFilters,
-  matchesAssigneeAndTags,
+  matchesBoardFilters,
   parseViewQuery,
   serializeViewQuery,
   sortWorkItems,
@@ -324,9 +325,19 @@ describe("assignee filter and sort (011-agent-access-mcp FR-008)", () => {
 });
 
 // 014-board-filters-mcp-catalogs: the board reuses the List/Table rules (FR-004).
-describe("matchesAssigneeAndTags and the board query (014 FR-004, FR-010)", () => {
-  const item = (assigneeUserId: string | null, tagNames: string[] = []) => ({ assigneeUserId, tagNames });
-  const f = (assignees: string[], tags: string[]) => ({ assignees, tags });
+describe("matchesBoardFilters and the board query (014 FR-004, FR-010)", () => {
+  const item = (
+    assigneeUserId: string | null,
+    tagNames: string[] = [],
+    areaName: string | null = null,
+    sizeName: string | null = null,
+  ) => ({ assigneeUserId, tagNames, areaName, sizeName });
+  const f = (assignees: string[], tags: string[], areas: string[] = [], sizes: string[] = []) => ({
+    assignees,
+    tags,
+    areas,
+    sizes,
+  });
 
   it.each([
     ["no filters", item(null), f([], []), "u1", true],
@@ -343,8 +354,24 @@ describe("matchesAssigneeAndTags and the board query (014 FR-004, FR-010)", () =
     ["none = no tags", item(null, []), f([], ["none"]), null, true],
     ["none ≠ tagged", item(null, ["UI"]), f([], ["none"]), null, false],
     ["none OR a tag", item(null, ["UI"]), f([], ["none", "UI"]), null, true],
+    ["area match ignores case", item(null, [], "Backend"), f([], [], ["backend"]), null, true],
+    ["area miss", item(null, [], "Backend"), f([], [], ["Web"]), null, false],
+    ["two areas → OR", item(null, [], "Web"), f([], [], ["Backend", "Web"]), null, true],
+    ["area none = no area", item(null), f([], [], ["none"]), null, true],
+    ["area none ≠ with area", item(null, [], "Web"), f([], [], ["none"]), null, false],
+    ["size match", item(null, [], null, "M"), f([], [], [], ["m"]), null, true],
+    ["size none = no size", item(null, [], "Web"), f([], [], [], ["none"]), null, true],
+    ["size none ≠ with size", item(null, [], null, "M"), f([], [], [], ["none"]), null, false],
+    ["area AND size", item(null, [], "Web", "S"), f([], [], ["Web"], ["M"]), null, false],
+    ["area AND size AND tag AND assignee", item("u1", ["Bug"], "Web", "M"), f(["u1"], ["Bug"], ["Web"], ["M"]), "u1", true],
   ] as const)("%s", (_label, it_, query, me, expected) => {
-    expect(matchesAssigneeAndTags({ ...it_, tagNames: [...it_.tagNames] }, { assignees: [...query.assignees], tags: [...query.tags] }, me)).toBe(expected);
+    expect(
+      matchesBoardFilters(
+        { ...it_, tagNames: [...it_.tagNames] },
+        { assignees: [...query.assignees], tags: [...query.tags], areas: [...query.areas], sizes: [...query.sizes] },
+        me,
+      ),
+    ).toBe(expected);
   });
 
   it("filterWorkItems agrees with the shared predicate for assignee and tags", () => {
@@ -357,15 +384,35 @@ describe("matchesAssigneeAndTags and the board query (014 FR-004, FR-010)", () =
     ];
     for (const query of [f(["me"], []), f([], ["bug", "none"]), f(["none"], ["UI"]), f(["u1"], ["Bug"])]) {
       const expected = rows
-        .filter((r) => matchesAssigneeAndTags({ assigneeUserId: r.assignee?.userId ?? null, tagNames: r.tags }, query, "u1"))
+        .filter((r) =>
+          matchesBoardFilters(
+            { assigneeUserId: r.assignee?.userId ?? null, tagNames: r.tags, areaName: r.areaName, sizeName: r.sizeName },
+            query,
+            "u1",
+          ),
+        )
         .map((r) => r.displayNumber);
       expect(numbers(filterWorkItems(rows, q(query), "2026-09-28", "u1"))).toEqual(expected);
     }
   });
 
-  it("serializes only the assignee and tag filters for the board", () => {
-    const query = q({ assignees: ["me", "u2"], tags: ["UI"], priorities: ["high"], status: "open", q: "x", sort: "title" });
-    expect(serializeViewQuery(query, "board")).toBe("assignee=me&assignee=u2&tag=UI");
+  it("serializes only the assignee, tag, area and size filters for the board", () => {
+    const query = q({
+      assignees: ["me", "u2"],
+      tags: ["UI"],
+      areas: ["Web", "none"],
+      sizes: ["M"],
+      priorities: ["high"],
+      status: "open",
+      q: "x",
+      sort: "title",
+    });
+    const qs = serializeViewQuery(query, "board");
+    expect(qs).toBe("assignee=me&assignee=u2&tag=UI&area=Web&area=none&size=M");
+    // Round trip through the address.
+    const back = parseViewQuery(new URLSearchParams(qs), new Set());
+    expect([back.assignees, back.tags, back.areas, back.sizes]).toEqual([["me", "u2"], ["UI"], ["Web", "none"], ["M"]]);
+    for (const key of BOARD_QUERY_KEYS) expect(qs).toContain(`${key}=`);
     expect(serializeViewQuery(q(), "board")).toBe("");
   });
 });

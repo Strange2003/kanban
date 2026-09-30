@@ -163,7 +163,7 @@ export function parseViewQuery(params: URLSearchParams, validStagePublicIds: Rea
 }
 
 /** The address parameters the board keeps — shared with List/Table (014-board-filters-mcp-catalogs FR-010). */
-export const BOARD_QUERY_KEYS = ["assignee", "tag"] as const;
+export const BOARD_QUERY_KEYS = ["assignee", "tag", "area", "size"] as const;
 
 /**
  * The inverse of parseViewQuery, without the leading "?". Default values are
@@ -173,10 +173,12 @@ export const BOARD_QUERY_KEYS = ["assignee", "tag"] as const;
 export function serializeViewQuery(query: ViewQuery, view: "list" | "table" | "board"): string {
   const params = new URLSearchParams();
   const appendAll = (key: string, values: string[]) => values.forEach((v) => params.append(key, v));
-  // The board only has the assignee and tag filters (014-board-filters-mcp-catalogs FR-010).
+  // The board only has the assignee, tag, area and size filters (014-board-filters-mcp-catalogs FR-010, KAN-15).
   if (view === "board") {
     appendAll("assignee", query.assignees);
     appendAll("tag", query.tags);
+    appendAll("area", query.areas);
+    appendAll("size", query.sizes);
     return params.toString();
   }
   if (query.status) params.set("status", query.status);
@@ -228,16 +230,24 @@ function matchesAssignee(selected: string[], userId: string | null, currentUserI
   });
 }
 
+/** What the board's filters look at on one Work Item. */
+export type BoardFilterItem = {
+  assigneeUserId: string | null;
+  tagNames: string[];
+  areaName: string | null;
+  sizeName: string | null;
+};
+
 /**
- * The assignee and tag filters (FR-007 of 009, FR-008 of 011), shared by
- * filterWorkItems and the board (FR-004 of 014-board-filters-mcp-catalogs) so
- * the three views can't drift apart: values in one filter combine with OR,
- * the two filters with AND; tags compare case-insensitively; "none" matches an
- * empty field and "me" the viewer.
+ * The assignee, tag, area and size filters (FR-007 of 009, FR-008 of 011,
+ * KAN-15), shared by filterWorkItems and the board (FR-004 of
+ * 014-board-filters-mcp-catalogs) so the views can't drift apart: values in
+ * one filter combine with OR, the filters with AND; names compare
+ * case-insensitively; "none" matches an empty field and "me" the viewer.
  */
-export function matchesAssigneeAndTags(
-  item: { assigneeUserId: string | null; tagNames: string[] },
-  query: Pick<ViewQuery, "assignees" | "tags">,
+export function matchesBoardFilters(
+  item: BoardFilterItem,
+  query: Pick<ViewQuery, "assignees" | "tags" | "areas" | "sizes">,
   currentUserId: string | null,
 ): boolean {
   if (query.tags.length) {
@@ -246,6 +256,8 @@ export function matchesAssigneeAndTags(
     const itemTags = item.tagNames.map((t) => t.toLowerCase());
     if (!((tagNone && itemTags.length === 0) || wanted.some((t) => itemTags.includes(t)))) return false;
   }
+  if (!matchesName(query.areas, item.areaName)) return false;
+  if (!matchesName(query.sizes, item.sizeName)) return false;
   if (query.assignees.length && !matchesAssignee(query.assignees, item.assigneeUserId, currentUserId)) return false;
   return true;
 }
@@ -277,9 +289,13 @@ export function filterWorkItems(
     if (query.stages.length && !query.stages.includes(row.stagePublicId)) return false;
     if (!matchesLevel(query.priorities, row.priority)) return false;
     if (!matchesLevel(query.severities, row.severity)) return false;
-    if (!matchesName(query.areas, row.areaName)) return false;
-    if (!matchesName(query.sizes, row.sizeName)) return false;
-    if (!matchesAssigneeAndTags({ assigneeUserId: row.assignee?.userId ?? null, tagNames: row.tags }, query, currentUserId)) {
+    if (
+      !matchesBoardFilters(
+        { assigneeUserId: row.assignee?.userId ?? null, tagNames: row.tags, areaName: row.areaName, sizeName: row.sizeName },
+        query,
+        currentUserId,
+      )
+    ) {
       return false;
     }
     if (query.overdue && !isOverdue(row.targetDate, row.closedAt, today!)) return false;

@@ -8,6 +8,7 @@ import { isRolePermissionError } from "@/lib/errors";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { NEW_WORK_ITEM_EVENT } from "@/lib/keyboard-shortcuts";
+import type { BoardFilterItem } from "@/lib/work-item-view";
 
 export function AddWorkItemButton({
   stagePublicId,
@@ -16,10 +17,10 @@ export function AddWorkItemButton({
 }: {
   stagePublicId: string;
   // 014-board-filters-mcp-catalogs FR-014: a new Work Item has no assignee and
-  // no tags; if the board's filters would hide it, say so instead of letting it vanish.
+  // no tags, area or size; if the board's filters would hide it, say so instead of letting it vanish.
   // KAN-11: open the form when the "n" shortcut fires (first column only).
   listenForNewShortcut?: boolean;
-  isHiddenByFilters?: (item: { assigneeUserId: null; tagNames: string[] }) => boolean;
+  isHiddenByFilters?: (item: BoardFilterItem) => boolean;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -54,7 +55,7 @@ export function AddWorkItemButton({
 
     setTitle("");
     setAdding(false);
-    if (isHiddenByFilters?.({ assigneeUserId: null, tagNames: [] })) {
+    if (isHiddenByFilters?.({ assigneeUserId: null, tagNames: [], areaName: null, sizeName: null })) {
       toast(`${result.data.displayId} was created but is hidden by the active filters.`);
     }
     router.refresh();
