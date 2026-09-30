@@ -31,7 +31,7 @@ import { useToast } from "@/components/ui/toast";
 import { nextClosedAt } from "@/lib/work-item-closing";
 import { BoardFilters } from "@/components/board/BoardFilters";
 import { useViewQuery } from "@/components/views/useViewQuery";
-import { matchesAssigneeAndTags, serializeViewQuery, type WorkItemViewOptions } from "@/lib/work-item-view";
+import { matchesBoardFilters, serializeViewQuery, type BoardFilterItem, type WorkItemViewOptions } from "@/lib/work-item-view";
 import { boardQueryStorageKey } from "@/lib/board-query-storage";
 import { writeBoardColumns } from "@/lib/board-column-memory";
 
@@ -46,6 +46,8 @@ export function Board({
   currentUserId,
   members,
   tagCatalog,
+  areaCatalog,
+  sizeCatalog,
 }: {
   projectPublicId: string;
   role: ProjectRole;
@@ -55,6 +57,9 @@ export function Board({
   currentUserId: string;
   members: WorkItemViewOptions["members"];
   tagCatalog: WorkItemViewOptions["tags"];
+  // KAN-15: the Area and Size filters' options, in manual order.
+  areaCatalog: WorkItemViewOptions["areas"];
+  sizeCatalog: WorkItemViewOptions["sizes"];
 }) {
   const { toast } = useToast();
   const router = useRouter();
@@ -86,16 +91,21 @@ export function Board({
   // 014-board-filters-mcp-catalogs: the filters live in the address, like
   // List/Table's (FR-009), and only hide cards — every column stays (FR-005).
   const [query, setQuery] = useViewQuery("board", NO_STAGES);
-  const filtersActive = query.assignees.length > 0 || query.tags.length > 0;
-  const isVisible = (item: { assigneeUserId: string | null; tagNames: string[] }) =>
-    matchesAssigneeAndTags(item, query, currentUserId);
+  const filtersActive =
+    query.assignees.length > 0 || query.tags.length > 0 || query.areas.length > 0 || query.sizes.length > 0;
+  const isVisible = (item: BoardFilterItem) => matchesBoardFilters(item, query, currentUserId);
   const visibleIds = useMemo(
     () =>
       new Set(
         workItemsState
           .filter((wi) =>
-            matchesAssigneeAndTags(
-              { assigneeUserId: wi.assignee?.userId ?? null, tagNames: wi.tags.map((t) => t.name) },
+            matchesBoardFilters(
+              {
+                assigneeUserId: wi.assignee?.userId ?? null,
+                tagNames: wi.tags.map((t) => t.name),
+                areaName: wi.areaName,
+                sizeName: wi.sizeName,
+              },
               query,
               currentUserId,
             ),
@@ -353,14 +363,21 @@ export function Board({
       onDragCancel={() => setDraggedWorkItemId(null)}
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <BoardFilters query={query} onChange={setQuery} members={members} tagCatalog={tagCatalog} />
+        <BoardFilters
+          query={query}
+          onChange={setQuery}
+          members={members}
+          tagCatalog={tagCatalog}
+          areaCatalog={areaCatalog}
+          sizeCatalog={sizeCatalog}
+        />
         {filtersActive && visibleIds.size === 0 && (
           <p className="text-muted-foreground px-4 pt-2 text-sm" role="status" data-testid="board-no-matches">
             No Work Items match the filters.{" "}
             <button
               type="button"
               className="rounded underline hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-              onClick={() => setQuery({ ...query, assignees: [], tags: [] })}
+              onClick={() => setQuery({ ...query, assignees: [], tags: [], areas: [], sizes: [] })}
             >
               Clear filters
             </button>

@@ -35,6 +35,8 @@ export default async function ProjectBoardPage({
           currentUserId={result.data.currentUserId}
           members={result.data.members}
           tagCatalog={result.data.tagCatalog}
+          areaCatalog={result.data.areaCatalog}
+          sizeCatalog={result.data.sizeCatalog}
         />
       </Suspense>
     </div>

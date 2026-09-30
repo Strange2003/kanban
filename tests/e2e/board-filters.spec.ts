@@ -2,7 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import { user } from "@/db/auth-schema";
-import { projects, tags, workItems, workItemTags } from "@/db/schema";
+import { areas, projects, sizes, tags, workItems, workItemTags } from "@/db/schema";
 import {
   signUpNewUser,
   createProjectViaUi,
@@ -19,7 +19,7 @@ const card = (page: Page, title: string) => page.locator('[data-testid="work-ite
 const visibleTitles = async (page: Page) =>
   (await page.getByTestId("work-item-card").locator("p.font-medium").allInnerTexts()).map((t) => t.trim());
 
-async function pick(page: Page, filter: "Assignee" | "Tags", option: string) {
+async function pick(page: Page, filter: "Assignee" | "Tags" | "Area" | "Size", option: string) {
   const bar = page.getByTestId("board-filters");
   const panel = bar.getByRole("group", { name: `${filter} filter` });
   // Re-open until React has hydrated the button (same race as helpers' clickUntilVisible).
@@ -110,6 +110,51 @@ test.describe("Board filters (US1)", () => {
     await bar.getByRole("button", { name: "Clear filters" }).click();
     await expect.poll(() => visibleTitles(page)).toHaveLength(4);
     await expect(page).toHaveURL(new RegExp(`${projectUrl.split("?")[0]}$`));
+  });
+
+  // KAN-15: Area and Size filter next to Assignee and Tags.
+  test("filters by area and size, with None and the catalog's manual order", async ({ page }) => {
+    const { projectUrl } = await seedBoard(page);
+    const publicId = projectUrl.split("/projects/")[1]!.split(/[?#/]/)[0]!;
+    const [project] = await db.select().from(projects).where(eq(projects.publicId, publicId));
+    const [web, backend] = await db
+      .insert(areas)
+      .values([
+        { projectId: project!.id, name: "Web", position: 0 },
+        { projectId: project!.id, name: "Backend", position: 1 },
+      ])
+      .returning();
+    const [small, medium] = await db
+      .insert(sizes)
+      .values([
+        { projectId: project!.id, name: "S", position: 0 },
+        { projectId: project!.id, name: "M", position: 1 },
+      ])
+      .returning();
+    const items = await db.select().from(workItems).where(eq(workItems.projectId, project!.id));
+    const idOf = (title: string) => items.find((wi) => wi.title === title)!.id;
+    await db.update(workItems).set({ areaId: web!.id, sizeId: small!.id }).where(eq(workItems.id, idOf("Mine UI")));
+    await db.update(workItems).set({ areaId: backend!.id, sizeId: medium!.id }).where(eq(workItems.id, idOf("Mine bug")));
+    await db.update(workItems).set({ areaId: backend!.id }).where(eq(workItems.id, idOf("Loose bug")));
+    await page.reload();
+
+    const bar = page.getByTestId("board-filters");
+    await bar.getByRole("button", { name: /^Area/ }).click();
+    await expect(bar.getByRole("group", { name: "Area filter" }).locator("label")).toHaveText(["Web", "Backend", "None"]);
+    await page.keyboard.press("Escape");
+
+    await pick(page, "Area", "Backend");
+    await expect(page).toHaveURL(/area=Backend/);
+    await expect.poll(() => visibleTitles(page)).toEqual(["Mine bug", "Loose bug"]);
+    await pick(page, "Size", "M");
+    await expect(page).toHaveURL(/size=M/);
+    await expect.poll(() => visibleTitles(page)).toEqual(["Mine bug"]);
+    await bar.getByRole("button", { name: "Remove Size: M filter" }).click();
+    await bar.getByRole("button", { name: "Remove Area: Backend filter" }).click();
+    await pick(page, "Area", "None");
+    await expect.poll(() => visibleTitles(page)).toEqual(["Plain"]);
+    await bar.getByRole("button", { name: "Clear filters" }).click();
+    await expect.poll(() => visibleTitles(page)).toHaveLength(4);
   });
 
   test("a Viewer can filter too (FR-007)", async ({ page, browser }) => {

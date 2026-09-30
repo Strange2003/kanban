@@ -1,10 +1,10 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { MultiSelectFilter, assigneeChoices, tagChoices } from "@/components/views/ViewFilters";
+import { MultiSelectFilter, assigneeChoices, nameChoices, tagChoices } from "@/components/views/ViewFilters";
 import { NONE, type ViewQuery, type WorkItemViewOptions } from "@/lib/work-item-view";
 
-// 014-board-filters-mcp-catalogs FR-001..FR-006: the board's two filters,
+// 014-board-filters-mcp-catalogs FR-001..FR-006 and KAN-15: the board's four filters,
 // with the same multi-select panels, choices and rules as List/Table
 // (components/views/ViewFilters.tsx). It only reports a new query; the board
 // writes it to the address.
@@ -13,11 +13,15 @@ export function BoardFilters({
   onChange,
   members,
   tagCatalog,
+  areaCatalog,
+  sizeCatalog,
 }: {
   query: ViewQuery;
   onChange: (next: ViewQuery) => void;
   members: WorkItemViewOptions["members"];
   tagCatalog: WorkItemViewOptions["tags"];
+  areaCatalog: WorkItemViewOptions["areas"];
+  sizeCatalog: WorkItemViewOptions["sizes"];
 }) {
   const assigneeOptions = assigneeChoices(members);
   const tagOptions = tagChoices(tagCatalog);
@@ -37,6 +41,16 @@ export function BoardFilters({
       label: `Tag: ${value.toLowerCase() === NONE ? "None" : value}`,
       remove: () => onChange({ ...query, tags: query.tags.filter((v) => v !== value) }),
     })),
+    ...query.areas.map((value) => ({
+      key: `area-${value}`,
+      label: `Area: ${value.toLowerCase() === NONE ? "None" : value}`,
+      remove: () => onChange({ ...query, areas: query.areas.filter((v) => v !== value) }),
+    })),
+    ...query.sizes.map((value) => ({
+      key: `size-${value}`,
+      label: `Size: ${value.toLowerCase() === NONE ? "None" : value}`,
+      remove: () => onChange({ ...query, sizes: query.sizes.filter((v) => v !== value) }),
+    })),
   ];
 
   return (
@@ -52,6 +66,18 @@ export function BoardFilters({
         choices={tagOptions}
         selected={query.tags}
         onChange={(tags) => onChange({ ...query, tags })}
+      />
+      <MultiSelectFilter
+        label="Area"
+        choices={nameChoices(areaCatalog)}
+        selected={query.areas}
+        onChange={(areas) => onChange({ ...query, areas })}
+      />
+      <MultiSelectFilter
+        label="Size"
+        choices={nameChoices(sizeCatalog)}
+        selected={query.sizes}
+        onChange={(sizes) => onChange({ ...query, sizes })}
       />
       {activeFilters.length > 0 && (
         <>
@@ -73,7 +99,7 @@ export function BoardFilters({
             type="button"
             variant="ghost"
             size="sm"
-            onClick={() => onChange({ ...query, assignees: [], tags: [] })}
+            onClick={() => onChange({ ...query, assignees: [], tags: [], areas: [], sizes: [] })}
           >
             Clear filters
           </Button>

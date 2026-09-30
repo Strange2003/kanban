@@ -20,6 +20,7 @@ import { ClosingStageToggle } from "@/components/board/ClosingStageToggle";
 import { Input } from "@/components/ui/input";
 import { isRolePermissionError } from "@/lib/errors";
 import { useToast } from "@/components/ui/toast";
+import type { BoardFilterItem } from "@/lib/work-item-view";
 
 // FR-008 of 003-kanban-board: double-click the column name to rename it in place.
 function StageName({
@@ -145,7 +146,7 @@ export function StageColumn({
   // filters let through; `totalCount` is every Work Item in the column (FR-005, FR-006).
   totalCount?: number;
   filtersActive?: boolean;
-  isHiddenByFilters?: (item: { assigneeUserId: null; tagNames: string[] }) => boolean;
+  isHiddenByFilters?: (item: BoardFilterItem) => boolean;
 }) {
   // One sortable registration per stage serves double duty: it's both the
   // reorder-columns drag source/target (FR-005 of 003) and the drop target
