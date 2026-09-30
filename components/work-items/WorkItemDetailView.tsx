@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Clock3, History, MessageSquare, Link2 } from "lucide-react";
-import { updateWorkItem, deleteWorkItem, closeWorkItem, type WorkItemWithDisplayId } from "@/lib/actions/work-items";
+import { updateWorkItem, deleteWorkItem, closeWorkItem, moveWorkItem, type WorkItemWithDisplayId } from "@/lib/actions/work-items";
 import {
   setWorkItemParent,
   removeWorkItemParent,
@@ -81,6 +81,8 @@ export function WorkItemDetailView({
   // The Server Actions enforce the same permissions; this only reflects them.
   const canEdit = can(initialDetail.role, "workItem:edit");
   const canComment = can(initialDetail.role, "workItem:comment");
+  // moveWorkItem requires workItem:edit (same as the board's drag and drop).
+  const canMove = canEdit;
   const canEditRelations = can(initialDetail.role, "relationship:edit");
   // 013-project-catalogs FR-014: "Create new" in the Tags/Area/Size fields.
   const canManageCatalogs = can(initialDetail.role, "catalog:manage");
@@ -97,6 +99,7 @@ export function WorkItemDetailView({
   const [targetDate, setTargetDate] = useState(workItem.targetDate ?? "");
   const [estimateHours, setEstimateHours] = useState(minutesToHoursInput(workItem.estimateMinutes));
   const [closing, setClosing] = useState(false);
+  const [movingColumn, setMovingColumn] = useState(false);
   const today = useLocalToday();
   const [selectedTags, setSelectedTags] = useState(initialDetail.itemTags);
   const [savedFields, setSavedFields] = useState(() => ({
@@ -393,6 +396,24 @@ export function WorkItemDetailView({
     router.refresh();
   }
 
+  // KAN-17: moves the item to the end of the chosen column, like MCP move_work_item.
+  async function handleMoveToColumn(toStageId: number) {
+    if (!canMove || movingColumn || toStageId === initialDetail.stage.id) return;
+    const target = initialDetail.stages.find((stage) => stage.id === toStageId);
+    if (!target) return;
+    setError(null);
+    setMovingColumn(true);
+    const result = await moveWorkItem({ workItemId: workItem.id, toStageId, toPosition: target.count });
+    setMovingColumn(false);
+    if (!result.ok) {
+      setError(result.error.message);
+      router.refresh();
+      return;
+    }
+    toast(`Moved to ${target.name}.`);
+    router.refresh();
+  }
+
   async function handlePostComment() {
     if (!commentDraft.trim() || postingComment) return;
     setDiscussionError(null);
@@ -502,7 +523,16 @@ export function WorkItemDetailView({
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
                   readOnly={!canEdit}
-                  className="h-auto w-full min-w-0 border-0 bg-transparent px-0 py-0 text-xl font-semibold shadow-none focus-visible:ring-0 sm:text-2xl"
+                  placeholder="Title"
+                  onKeyDown={(event) => {
+                    // Escape cancels the edit back to the saved title.
+                    if (event.key === "Escape") {
+                      setTitle(savedFields.title);
+                      event.currentTarget.blur();
+                    }
+                  }}
+                  title={canEdit ? "Click to edit the title" : undefined}
+                  className={"-mx-2 h-auto w-full min-w-0 rounded-md border border-transparent bg-transparent px-2 py-1 text-xl font-semibold shadow-none focus-visible:ring-2 focus-visible:ring-violet-400 sm:text-2xl" + (canEdit ? " hover:border-border" : "")}
                 />
                 <p className="text-xs text-muted-foreground">
                   Created <LocalDate value={workItem.createdAt} /> · Updated <LocalDate value={workItem.updatedAt} />
@@ -585,6 +615,18 @@ export function WorkItemDetailView({
                     canCreate={canManageCatalogs}
                     disabled={!canEdit}
                   />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="wi-column">Column</Label>
+                  <select
+                    id="wi-column"
+                    value={initialDetail.stage.id}
+                    onChange={(event) => void handleMoveToColumn(Number(event.target.value))}
+                    disabled={!canMove || movingColumn}
+                    className={selectClassName}
+                  >
+                    {initialDetail.stages.map((stage) => <option key={stage.id} value={stage.id}>{stage.name}</option>)}
+                  </select>
                 </div>
               </section>
 
