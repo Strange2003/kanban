@@ -7,6 +7,7 @@ import { ProjectSidebarSkeleton } from "@/components/sidebar/ProjectSidebarSkele
 import { NotificationsPanel } from "@/components/sidebar/NotificationsPanel";
 import { KeyboardShortcutsProvider } from "@/components/keyboard/KeyboardShortcutsProvider";
 import { SearchButton } from "@/components/keyboard/SearchButton";
+import { UserCard } from "@/components/sidebar/UserCard";
 import { WorkspaceShell } from "@/components/sidebar/WorkspaceShell";
 
 // Protected shell for everything behind login. ProjectSidebar and
@@ -18,7 +19,7 @@ export default async function WorkspaceLayout({
 }: {
   children: React.ReactNode;
 }) {
-  await requireSession();
+  const { user } = await requireSession();
 
   return (
     <KeyboardShortcutsProvider>
@@ -43,6 +44,7 @@ export default async function WorkspaceLayout({
           </Suspense>
         </div>
       }
+      footer={<UserCard name={user.name} email={user.email} image={user.image ?? null} />}
       sidebar={
         <Suspense fallback={<ProjectSidebarSkeleton />}>
           <ProjectSidebar />

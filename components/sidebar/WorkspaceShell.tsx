@@ -8,9 +8,11 @@ import { Button } from "@/components/ui/button";
 export function WorkspaceShell({
   sidebar,
   notifications,
+  footer,
   children,
 }: {
   sidebar: React.ReactNode;
+  footer?: React.ReactNode;
   notifications: React.ReactNode;
   children: React.ReactNode;
 }) {
@@ -112,6 +114,7 @@ export function WorkspaceShell({
             </div>
           )}
           {sidebar}
+          {footer}
         </div>
         {children}
       </div>

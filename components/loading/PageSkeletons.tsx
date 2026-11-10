@@ -233,3 +233,20 @@ export function ConnectedAgentsSkeleton() {
     </SkeletonFrame>
   );
 }
+
+export function AccountSkeleton() {
+  return (
+    <SkeletonFrame label="Loading account…" className="flex-1 overflow-hidden">
+      <div className="mx-auto w-full max-w-2xl space-y-6 p-6" aria-hidden>
+        <Bone className="h-6 w-28" fall={false} />
+        <div className="flex items-center gap-3">
+          <Bone className="h-12 w-12 rounded-full" delay={step(0)} />
+          <Bone className="h-4 w-48" delay={step(1)} />
+        </div>
+        <Bone className="h-9 w-full rounded-md" delay={step(2)} />
+        <Bone className="h-12 w-full rounded-md" delay={step(3)} />
+        <Bone className="h-9 w-28 rounded-md" delay={step(4)} />
+      </div>
+    </SkeletonFrame>
+  );
+}

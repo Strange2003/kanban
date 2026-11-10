@@ -17,6 +17,7 @@ const EXPECTED = [
   "projects/[projectPublicId]/settings/catalogs",
   "my-work",
   "settings/agents",
+  "settings/account",
 ];
 
 function pageDirs(dir: string, rel = ""): string[] {
